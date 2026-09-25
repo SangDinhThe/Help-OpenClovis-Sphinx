@@ -3,15 +3,30 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-help_oc documentation
-=====================
+OpenClovis Product Documentation
+================================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+Welcome
+-------
+This site contains detailed documentation of the OpenClovis product family. You can find all the materials you need here.
 
+Introductory Materials
+----------------------
+If you are looking for introductory and marketing materials, please visit our corporate site at `openclovis.com <https://www.openclovis.com/>`__.
+
+Download
+--------
+If you are looking for the SAFplus Platform Product itself, please download the latest release at `ftp.openclovis.com <https://ftp.openclovis.com/>`__. And visit our github repository `github.com/Openclovis <https://www.github.com/Openclovis/>`__.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Content:
+
+   Home <self>
+   Doc Central
+   source/relnotes
+   source/installguide
+   SAFplus Platform Tutorials
+   SAF API Tutorials
+   FAQ
 

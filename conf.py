@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'help_oc'
+project = 'OpenClovis Documentaion'
 copyright = '2026, oc_team'
 author = 'oc_team'
 release = '1.0.0'
@@ -24,5 +24,18 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'alabaster'
+#html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
+html_logo = '_static/logo/cropped-opencloivs-logo-1.png'
+html_favicon = '_static/logo/cropped-opencloivs-logo-1.png'
+html_css_files = [
+    'css/headings.css',
+    'css/tables.css',
+]
+html_theme_options = {
+#    'logo_only': True,
+#    'display_version': False,
+    'prev_next_buttons_location': 'none',
+    'style_external_links': True,
+}
