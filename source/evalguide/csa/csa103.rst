@@ -1,0 +1,630 @@
+csa103 Checkpointing
+====================
+Checkpointing refers to the practice of saving crucial program state in the cluster's "cloud" so that a standby process can resume 
+operation without loss of state upon failure of the active process. This data is saved via the SAFplus Checkpointing APIs into what 
+appears to be a simple key/value in-RAM database (like a hash table). But this "database" is actually replicated by our checkpointing 
+servers and can be shared between multiple components.
+
+Adding checkpointing to your application is simple. You first identify crucial program state and then you have the "active" process 
+write it to a special key/value-database-like subsystem via the Checkpointing APIs. When the "standby" process becomes active, you 
+read the checkpoint and update the program state before resuming service.
+
+Objective
+---------
+csa103 demonstrates the use of the SAFplus Checkpoint service to provide basic failure recovery. csa103 builds on csa102. The 
+SAFplus Checkpoint service is SA-Forum compliant and this tutorial expects that you will refer to the SA-Forum document for an 
+in-depth description of the checkpointing APIs used.
+
+What Will You Learn
+-------------------
+
+* how to initialize the checkpoint client library,
+* how to create and open a checkpoint,
+* how to create a section in the checkpoint
+* how to write data to the checkpoint section
+* and read data from the checkpoint section.
+* how to extend the SAF dispatch loop to handle multiple libraries
+
+The Code
+--------
+The code can be found within the following directory
+
+.. code-block:: text
+
+    <project-area_dir>/eval/src/app/csa103Comp
+
+To increase readability, all checkpointing code has been isolated into a single module that consists of 2 files: checkpointFns.c 
+and checkpointFns.h. These files provide the following APIs.
+
+.. code-block:: c
+    :caption: checkpointFns.h
+
+    extern SaAisErrorT checkpoint_initialize(void);
+    extern void        checkpoint_finalize(void);
+    extern ClRcT       checkpoint_write_seq(ClUint32T);
+    extern ClRcT       checkpoint_read_seq(ClUint32T*);
+
+These APIs constitute the basic operations of any messaging library; initialize, open, send and receive.
+
+This file also declares some checkpoint handles as global variables and defines a "well-known" name for our checkpoint table. This 
+simple example will only have a single row/key in the table (called a "section" in SA-Forum terminology), so we also define a 
+well-known name for the row.
+
+.. code-block:: c
+    :caption: checkpointFns.h
+
+    #define CKPT_NAME     "csa103Ckpt"    /* Checkpoint table name for this application  */
+    SaCkptHandleT  ckptLibraryHandle;     /* library hangle                              */
+    SaCkptCheckpointHandleT ckpt_handle;  /* Checkpoint table handle                     */
+    #define CKPT_SID_NAME "1"             /* Checkpoint section id                       */
+    extern SaCkptSectionIdT ckpt_sid;
+
+Initialization
+--------------
+Initialization follows the standard SA-Forum library lifecycle pattern where before use an initialize call must occur that returns 
+a handle that is used in subsequent library accesses.
+
+In this example, we will both initialize the library and open the checkpoint table in the same function.
+
+The following code excerpts handle the library initialization:
+
+.. code-block:: c
+    :caption: checkpointFns.c
+
+    SaAisErrorT checkpoint_initialize(void)
+    {
+        SaAisErrorT      rc = SA_AIS_OK;
+        SaVersionT ckpt_version = {'B', 1, 1};
+        SaCkptCallbacksT callbacks;
+
+    ...
+
+        /* These callbacks are only called when an Async style function call completes */
+        callbacks.saCkptCheckpointOpenCallback        = checkpointOpenCompleted;
+        callbacks.saCkptCheckpointSynchronizeCallback = checkpointSynchronizeCompleted;
+            
+        clprintf(CL_LOG_SEV_INFO,"Checkpoint Initialize");
+
+            
+        /* Initialize checkpointing library */
+        rc = saCkptInitialize(&ckptLibraryHandle,	/* Checkpoint service handle */
+                            &callbacks,			    /* Optional callbacks table */
+                            &ckpt_version);   /* Required verison number */
+        if (rc != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR,"Failed to initialize checkpoint service with rc [%#x]", rc);
+            return rc;
+        }
+        clprintf(CL_LOG_SEV_INFO,"Checkpoint service initialized (handle=0x%llx)", ckptLibraryHandle);
+    ...
+    }
+
+In this example, we register callbacks that are called when the asynchronous versions of the open and synchronize APIs are called. 
+For threaded applications, it is simpler to use the default, synchronous APIs. The asynchronous versions are used in this example 
+solely for expositional purposes.
+
+Now let's focus on the portions that open the checkpoint table:
+
+.. code-block:: c
+    :caption: checkpointFns.c
+
+    SaAisErrorT checkpoint_initialize(void)
+    {
+        SaAisErrorT      rc = SA_AIS_OK;
+        SaNameT    ckpt_name = { strlen(CKPT_NAME), CKPT_NAME };
+        SaCkptCheckpointCreationAttributesT attrs;
+
+        ...
+
+        /* Set up the checkpoint configuration */
+        attrs.creationFlags     = SA_CKPT_WR_ACTIVE_REPLICA_WEAK | SA_CKPT_CHECKPOINT_COLLOCATED;        
+        attrs.checkpointSize    = sizeof(ClUint32T);
+        attrs.retentionDuration = (ClTimeT) 10;        /* How long to keep the checkpoint around even if no one has it open */
+        attrs.maxSections       = 2;                   /* Max number of 'rows' in the table */
+        attrs.maxSectionSize    = sizeof(ClUint32T);   /* Max 'row' size */
+        attrs.maxSectionIdSize  = (ClSizeT)64;         /* Max 'row' identifier size */
+
+        ...    
+
+        /* Create the checkpoint table for read and write. */
+        rc = saCkptCheckpointOpen(ckptLibraryHandle,      // Service handle
+                                &ckpt_name,         // Checkpoint name
+                                &attrs,       // Optional creation attr.
+                                (SA_CKPT_CHECKPOINT_READ |
+                                SA_CKPT_CHECKPOINT_WRITE |
+                                SA_CKPT_CHECKPOINT_CREATE),
+                                (SaTimeT)SA_TIME_MAX,        // No timeout
+                                &ckpt_handle);      // Checkpoint handle
+
+        if (rc != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR,"Failed [0x%x] to open checkpoint",rc);
+            return rc;
+        }
+        clprintf(CL_LOG_SEV_INFO,"Checkpoint opened (handle=0x%llx)", ckpt_handle);
+        return rc;
+    }
+
+A checkpoint creation attributes structure is first defined and then its fields are set to define the behavior of the checkpoint. 
+The definitions of these fields is beyond the scope of this guide, but are available in the SA-Forum checkpointing documentation.
+
+Next, the saCkptCheckpointOpen function is called to open or create the checkpoint table. As the processes that constitute a 
+redundant application start, their initialization routines are racing each other to create/open the table first. Therefore it is 
+necessary to specify the SA_CKPT_CHECKPOINT_CREATE (in all processes) to ensure that whichever process wins will create the checkpoint.
+
+Writing
+-------
+Writing to a checkpoint section can fail if the section does not exist or if the process is not the checkpoint's "active replica". 
+The active replica is essentially the checkpoint table's "master" copy and is only needed for checkpoints that are configured to 
+allow only one writer. The active replica is assigned via a simple API call that is wrapped here:
+
+.. code-block:: c
+    :caption: checkpointFns.c
+
+    ClRcT checkpoint_replica_activate(void)
+    {
+        SaAisErrorT rc = SA_AIS_OK;
+
+        if ((rc = saCkptActiveReplicaSet(ckpt_handle)) != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "checkpoint_replica_activate failed [0x%x] in ActiveReplicaSet", rc);
+        }
+        else rc = SA_AIS_OK;
+
+        return rc;
+    }
+
+The application will call this API when the AMF tells it to become "active" for the CSI (work assignment), as shown in the "Putting 
+it all Together" section.
+
+The following code wraps the section write API. It first attempts to write the section and if that fails, the code creates the section.
+
+.. code-block:: c
+    :caption: checkpointFns.c
+
+    SaAisErrorT checkpoint_write_seq(ClUint32T seq)
+    {
+        SaAisErrorT rc = SA_AIS_OK;
+        ClUint32T seq_no;
+        
+        /* Putting data in network byte order */
+        seq_no = htonl(seq);
+        
+        /* Write checkpoint */
+        rc = saCkptSectionOverwrite(ckpt_handle, &ckpt_sid, &seq_no, sizeof(ClUint32T));
+        if (rc != SA_AIS_OK)
+        {
+            /* The error SA_AIS_ERROR_NOT_EXIST can occur either because we are not the active replica OR
+            if the overwrite failed because the section did not exist then try to create the section.
+
+            But in this case we know our application will not attempt to write unless it has set itself as
+            the active replica so the problem MUST be a missing section.
+            */
+            if ((rc == 0x1000a) || (rc == SA_AIS_ERR_NOT_EXIST))
+            {
+                SaCkptSectionCreationAttributesT    section_cr_attr;
+                
+                /* Expiration time for section can also be varied
+                * once parameters are read from a configuration file
+                */
+                section_cr_attr.expirationTime = SA_TIME_END;
+                section_cr_attr.sectionId = &ckpt_sid;
+                rc = saCkptSectionCreate(ckpt_handle,&section_cr_attr,(SaUint8T*) &seq_no, sizeof(ClUint32T));            
+            }
+            if (rc != SA_AIS_OK)
+            {
+                clprintf(CL_LOG_SEV_ERROR,"Failed [0x%x] to write to section", rc);
+            }
+        }
+
+        if (rc == SA_AIS_OK)
+        {
+            /*
+            * Synchronize the checkpoint to all the replicas.
+            */
+    #if 0          /* Synchronous synchronize example */
+            rc = saCkptCheckpointSynchronize(ckpt_handle, SA_TIME_END );
+            if (rc != SA_AIS_OK)
+            {
+                clprintf(CL_LOG_SEV_ERROR,"Failed [0x%x] to synchronize the checkpoint", rc);
+            }
+    #else
+            rc = saCkptCheckpointSynchronizeAsync(ckpt_handle,syncCount);
+            syncCount++;
+            
+    #endif        
+        }
+
+        return rc;
+    }
+
+The code also synchronizes the checkpoint. This synchronize operation ensures that all replicas have up-to-date data, and is only 
+necessary for certain checkpoint configurations. In this case, the code demonstrates both the synchronous and asynchronous APIs. 
+The async API is currently enabled simply do demonstrate the proper function of the combined AMF and checkpoint event dispatch loop 
+(see the "Putting it all Together" section).
+
+Reading
+-------
+Reading the checkpoint is quite simple. The API allows for reads of multiple sections and allows subsets of the section's data to 
+be read so an "IO-vector" style data structure is first initialized. To do multiple-section reads, this data structure should be an 
+array of SaCkptIOVectorElementT. But in this example we only read a single section so an array is not needed.
+
+.. code-block:: c
+    :caption: checkpointFns.c
+
+    ClRcT checkpoint_read_seq(ClUint32T *seq)
+    {
+        SaAisErrorT rc = SA_AIS_OK;
+        ClUint32T err_idx; /* Error index in ioVector */
+        ClUint32T seq_no = 0xffffffff;
+        SaCkptIOVectorElementT iov = {
+            .sectionId  = ckpt_sid,
+            .dataBuffer = (ClPtrT)&seq_no,
+            .dataSize   = sizeof(ClUint32T),
+            .dataOffset = (ClOffsetT)0,
+            .readSize   = sizeof(ClUint32T)
+        };
+            
+        rc = saCkptCheckpointRead(ckpt_handle, &iov, 1, &err_idx);
+        if (rc != SA_AIS_OK)
+        {
+            if (rc != SA_AIS_ERR_NOT_EXIST)  /* NOT_EXIST is ok, just means no active has written */
+                return SA_AIS_OK;
+            
+            clprintf(CL_LOG_SEV_ERROR,"Error: [0x%x] from checkpoint read, err_idx = %u", rc, err_idx);
+        }
+
+        *seq = ntohl(seq_no);
+        
+        return SA_AIS_OK;
+    }
+
+It is important to handle the case of a missing section properly. Whether your application sees this error depends on the design of 
+the application, but is a common design to see missing sections on application start because no prior "active" existed to fill the 
+checkpoint. In this design, it is only on failover that the sections will have been written.
+
+Putting it all Together
+-----------------------
+These functions are called from the application's clCompAppMain.c file to implement an application that simply prints a sequence 
+count. But this count is checkpointed so it is not affected by process failure!
+
+First, let's define what the program will do when it becomes active. The first step is to take over the "active replica" of the 
+checkpoint so that the process can write the checkpoint. Next, it attempts to read the checkpoint to recover the last sequence 
+number checkpointed by any prior "active" process. Finally, it enters the "active" loop and repeatedly increments the sequence 
+number and writes the checkpoint.
+
+.. code-block:: c
+    :caption: main.c
+
+    void* csa103CkptActive(ClPtrT unused)
+    {
+        ClRcT rc = SA_AIS_OK;
+
+        /* This thread will only be started when the application becomes active */
+        assert(ha_state == SA_AMF_HA_ACTIVE);    
+
+        clprintf(CL_LOG_SEV_INFO,"Active thread has started");
+        /* Set this replica "active" so I can write to the checkpoint */
+        if ((rc = saCkptActiveReplicaSet(ckpt_handle)) != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "checkpoint_replica_activate failed [0x%x] in ActiveReplicaSet", rc);
+        }
+
+        /* Attempt to recover the state of the prior active */
+        checkpoint_read_seq(&seq);
+        
+        while (!unblockNow)
+        {
+            clprintf(CL_LOG_SEV_INFO,"Hello World! (seq=%d)", seq++);            
+            /* Checkpoint new sequence number */
+            checkpoint_write_seq(seq);
+            sleep(1);
+        }
+        return CL_OK;
+    }
+
+Next, we move to the "main" function. In the initialization portion we will also initialize the checkpoint:
+
+.. code-block:: c
+    :caption: main.c
+
+    ...
+        /*
+        * Print out standard information for this component.
+        */
+
+        clEoMyEoIocPortGet(&iocPort);
+        
+        clprintf (CL_LOG_SEV_INFO, "Component [%.*s] : PID [%d]. Initializing\n", appName.length, appName.value, mypid);
+        clprintf (CL_LOG_SEV_INFO, "   IOC Address             : 0x%x\n", clIocLocalAddressGet());
+        clprintf (CL_LOG_SEV_INFO, "   IOC Port                : 0x%x\n", iocPort);
+
+        checkpoint_initialize();
+    ...
+
+Next, we enter the dispatch loop. The auto-generated code creates a loop that handles the AMF processing. This generated loop has 
+been extended to also handle checkpoint processing. Note that it is also perfectly acceptable (even easier) to spawn 2 threads and 
+have one handle the AMF dispatches and the other checkpoint dispatches. This code has been implemented in this manner to show how 
+it can all be done in a single thread.
+
+.. code-block:: c
+    :caption: main.c
+
+        /*
+        * Block on AMF dispatch file descriptor for callbacks
+        */
+        if (1)
+        {
+            
+            SaSelectionObjectT amf_dispatch_fd;
+            SaSelectionObjectT ckpt_dispatch_fd;
+            int maxFd;
+            fd_set read_fds;
+
+            /*
+            * Get the AMF dispatch FD for the callbacks
+            */
+            if ( (rc = saAmfSelectionObjectGet(amfHandle, &amf_dispatch_fd)) != SA_AIS_OK)
+                goto errorexit;
+            if ( (rc = saCkptSelectionObjectGet(ckptLibraryHandle, &ckpt_dispatch_fd)) != SA_AIS_OK)
+                goto errorexit;
+
+            maxFd = max(amf_dispatch_fd,ckpt_dispatch_fd);
+            do
+            {
+                FD_ZERO(&read_fds);
+                FD_SET(amf_dispatch_fd, &read_fds);
+                FD_SET(ckpt_dispatch_fd, &read_fds);
+            
+                if( select(maxFd + 1, &read_fds, NULL, NULL, NULL) < 0)
+                {
+                    char errorStr[80];
+                    int err = errno;
+                    if (EINTR == err)
+                    {
+                        continue;
+                    }
+                    errorStr[0] = 0; /* just in case strerror does not fill it in */
+                    strerror_r(err, errorStr, 80);
+                    clprintf (CL_LOG_SEV_ERROR, "Error [%d] during dispatch loop select() call: [%s]",err,errorStr);
+                    break;
+                }
+                if (FD_ISSET(amf_dispatch_fd,&read_fds)) saAmfDispatch(amfHandle, SA_DISPATCH_ALL);
+                if (FD_ISSET(ckpt_dispatch_fd,&read_fds)) saCkptDispatch(ckptLibraryHandle, SA_DISPATCH_ALL);
+            }while(!unblockNow);      
+        }
+
+Finally, when this application becomes active, we need to kick off the csa103CkptActive function in a new thread:
+
+.. code-block:: c
+    :caption: main.c
+
+        case SA_AMF_HA_ACTIVE:
+        {
+            /*
+                * AMF has requested application to take the active HA state 
+                * for the CSI.
+                */
+            clprintf(CL_LOG_SEV_INFO,"Active state requested from state %d", ha_state);
+            
+            ha_state = SA_AMF_HA_ACTIVE;
+
+            pthread_t thr;
+            pthread_create(&thr,NULL,csa103CkptActive,NULL);
+            
+            saAmfResponse(amfHandle, invocation, SA_AIS_OK);
+            break;
+        }
+
+In this example, there is nothing to do while the process is assigned standby. This actually can be a problem; if the checkpoint is 
+large it may take quite some time for the newly-assigned active process to completely read and process the checkpoint. The standby 
+can read the checkpoint but how can it determine what it needs to read; what sections the active has changed?
+
+Thus the SA-Forum checkpoint definition is not a "cold standby" because the process is running, but it is also not quite "hot"; we 
+call it a "warm-standby".
+
+But the OpenClovis SAFplus Platform provides an extension to the SA-Forum checkpoint definition that realizes true hot standby 
+behavior. This extension will call an application registered call-back function whenever the active writes the checkpoint with all 
+the write information. This allows the standby to remain in sync with the active so the checkpoint does not need to be read upon 
+failover.
+
+How to Run csa103 and What to Observe
+-------------------------------------
+This sample application can run on all Runtime Hardware Setups. The following, lists which node csa103compI* runs on.
+
+* **Runtime Hardware Setup 1.1 and 2.1**
+
+  csa103compI0 and csa103compI1 will run upon the single node.
+
+* **Runtime Hardware Setup 1.2 and 2.2**
+
+  csa103compI0 runs on PayloadNodeI0 and csa103compI1 runs on PayloadNodeI1
+
+* **Runtime Hardware Setup 1.3 and 2.3**
+
+  csa103compI2 and csa103compI3 run on SCNodeI0 and SCNodeI1 respectively. csa103compI0 and csa103compI1 run on PayloadNodeI0 and 
+  PayloadNodeI1 respectively.
+
+  In the four node set up SCNodeI0 and SCNodeI1 output data via /root/asp/var/log/csa103CompI2 and /root/asp/var/log/csa103CompI3 
+  respectively. Therefore in this case follow the below instructions replacing csa103CompI0 and csa103compI1 with csa103compI2 and 
+  csa103compI3 respectively.
+
+Just like all the "eval" programs, you need to compile, make images, deploy and then start the SAFplus platform on your target 
+machines. This tutorial will specifically use the single node configuration since that is the simplest for evaluation purposes.
+
+CSA103 is "unlocked" (running with work assigned) by default but (in review) this is what you can do to start/stop the application 
+with the SAFplus Platform Console:
+
+Lock assignment sg csa103SGI0
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+First, on the active System Controller move it to state LockAssignment with (Unlock csa203SGI0 instead of csa103SGI0 to run csa203)
+
+.. code-block:: text
+
+    cli[Test]-> setc 1
+    cli[Test:SCNodeI0]-> setc cpm
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa103SGI0
+
+The following output is given when you run tail -f on both of the csa103 log files simultaneously:
+
+.. code-block:: text
+
+    # tail -f var/log/csa103CompI?Log.latest
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa103CompI0Log.latest
+
+    root@gh-lubuntu1204:~/eval# tail -f var/log/csa103CompI?Log.latest
+    ==> var/log/csa103CompI0Log.latest <==
+    Tue Jan 15 15:47:23.778 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00051 :   INFO) Hello World! (seq=29)
+    Tue Jan 15 15:47:23.779 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00052 :   INFO) Checkpoint synchronize [30] completed 
+    Tue Jan 15 15:47:24.778 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00053 :   INFO) Hello World! (seq=30)
+    Tue Jan 15 15:47:25.779 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00054 :   INFO) Hello World! (seq=31)
+    Tue Jan 15 15:47:26.780 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00055 :   INFO) Hello World! (seq=32)
+    Tue Jan 15 15:47:27.781 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00056 :   INFO) Hello World! (seq=33)
+    Tue Jan 15 15:47:28.783 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00057 :   INFO) Hello World! (seq=34)
+    Tue Jan 15 15:47:29.784 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00058 :   INFO) Hello World! (seq=35)
+    Tue Jan 15 15:47:30.785 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00059 :   INFO) Hello World! (seq=36)
+    Tue Jan 15 15:47:31.785 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00060 :   INFO) Hello World! (seq=37)
+
+    ==> var/log/csa103CompI1Log.latest <==
+    OpenClovis_Logfile
+
+    ==> var/log/csa103CompI0Log.latest <==
+    Tue Jan 15 15:47:32.786 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00061 :   INFO) Hello World! (seq=38)
+    Tue Jan 15 15:47:33.787 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00062 :   INFO) Hello World! (seq=39)
+    Tue Jan 15 15:47:33.788 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00063 :   INFO) Checkpoint synchronize [40] completed 
+    Tue Jan 15 15:47:34.788 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00064 :   INFO) Hello World! (seq=40)
+    Tue Jan 15 15:47:35.788 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00065 :   INFO) Hello World! (seq=41)
+
+So here we see that csa103CompI0 is the master and is currently counting upwards.
+
+Kill process
+^^^^^^^^^^^^
+Next, let us kill this process (the process ID is in the logs, just after the node name -- in this case 4276) while simultaneously 
+"tailing" the logs:
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa103CompI?Log.latest
+
+    Tue Jan 15 15:55:36.237 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00593 :   INFO) Hello World! (seq=521)
+    Tue Jan 15 15:55:37.237 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00594 :   INFO) Hello World! (seq=522)
+    Tue Jan 15 15:55:38.238 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00595 :   INFO) Hello World! (seq=523)
+    Tue Jan 15 15:55:39.239 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00596 :   INFO) Hello World! (seq=524)
+    Tue Jan 15 15:55:40.240 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00597 :   INFO) Hello World! (seq=525)
+    Tue Jan 15 15:55:41.241 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00598 :   INFO) Hello World! (seq=526)
+    Tue Jan 15 15:55:42.242 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00599 :   INFO) Hello World! (seq=527)
+
+    ==> var/log/csa103CompI1Log.latest <==
+    OpenClovis_Logfile
+
+    ==> var/log/csa103CompI0Log.latest <==
+    Tue Jan 15 15:55:43.243 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00600 :   INFO) Hello World! (seq=528)
+    Tue Jan 15 15:55:44.244 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00601 :   INFO) Hello World! (seq=529)
+    Tue Jan 15 15:55:44.245 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00602 :   INFO) Checkpoint synchronize [530] completed 
+    Tue Jan 15 15:55:45.244 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00603 :   INFO) Hello World! (seq=530)
+    Tue Jan 15 15:55:46.245 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00604 :   INFO) Hello World! (seq=531)
+    Tue Jan 15 15:55:47.246 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00605 :   INFO) Hello World! (seq=532)
+    Tue Jan 15 15:55:48.247 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00606 :   INFO) Hello World! (seq=533)
+    Tue Jan 15 15:55:49.248 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00607 :   INFO) Hello World! (seq=534)
+    Tue Jan 15 15:55:50.249 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00608 :   INFO) Hello World! (seq=535)
+    Tue Jan 15 15:55:51.250 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00609 :   INFO) Hello World! (seq=536)
+    Tue Jan 15 15:55:52.250 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00610 :   INFO) Hello World! (seq=537)
+    Tue Jan 15 15:55:53.251 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00611 :   INFO) Hello World! (seq=538)
+    Tue Jan 15 15:55:54.252 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00612 :   INFO) Hello World! (seq=539)
+    Tue Jan 15 15:55:54.253 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00613 :   INFO) Checkpoint synchronize [540] completed 
+    Tue Jan 15 15:55:55.253 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00614 :   INFO) Hello World! (seq=540)
+    Tue Jan 15 15:55:56.254 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00615 :   INFO) Hello World! (seq=541)
+    Tue Jan 15 15:55:57.254 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00616 :   INFO) Hello World! (seq=542)
+    Tue Jan 15 15:55:58.255 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00617 :   INFO) Hello World! (seq=543)
+    Tue Jan 15 15:55:59.257 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00618 :   INFO) Hello World! (seq=544)
+    Tue Jan 15 15:56:00.258 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00619 :   INFO) Hello World! (seq=545)
+    Tue Jan 15 15:56:01.259 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00620 :   INFO) Hello World! (seq=546)
+
+    ==> var/log/csa103CompI1Log.latest <==
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00016 :   INFO) Component [csa103CompI1] : PID [4275]. CSI Set Received
+
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00017 :   INFO) CSI Flags : [Target All]
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00018 :   INFO) HA state : [Active]
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00019 :   INFO) Active Descriptor :
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00020 :   INFO) Transition Descriptor : [3]
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00021 :   INFO) Active Component : [csa103CompI0]
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00022 :   INFO) Active state requested from state 2
+    Tue Jan 15 15:56:01.287 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00023 :   INFO) Active thread has started
+    Tue Jan 15 15:56:01.289 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00024 :   INFO) Hello World! (seq=547)
+    Tue Jan 15 15:56:01.290 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00025 :   INFO) Checkpoint synchronize [0] completed 
+
+    ==> var/log/csa103CompI0Log.latest <==
+    Tue Jan 15 15:56:01.320 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00001 :   INFO) Component [csa103CompI0] : PID [5621]. Initializing
+
+    Tue Jan 15 15:56:01.320 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00002 :   INFO)    IOC Address             : 0x1
+
+    Tue Jan 15 15:56:01.320 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00003 :   INFO)    IOC Port                : 0x89
+
+    Tue Jan 15 15:56:01.320 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00004 :   INFO) Checkpoint Initialize
+    Tue Jan 15 15:56:01.323 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00005 :   INFO) Checkpoint service initialized (handle=0x1000900000001)
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00006 :   INFO) Checkpoint opened (handle=0x1000900000002)
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00007 :   INFO) Component [csa103CompI0] : PID [5621]. CSI Set Received
+
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00008 :   INFO) CSI Flags : [Add One]
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00009 :   INFO) CSI Name : [csa103CSII0]
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00010 :   INFO) Name value pairs :
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00011 :   INFO) HA state : [Standby]
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00012 :   INFO) Standby Descriptor :
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00013 :   INFO) Standby Rank : [1]
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00014 :   INFO) Active Component : [csa103CompI1]
+    Tue Jan 15 15:56:01.324 2013 (SCNodeI0.5621 : csa103CompEO0.---.---.00015 :   INFO)  Standby state requested from state 0
+
+    ==> var/log/csa103CompI1Log.latest <==
+    Tue Jan 15 15:56:02.290 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00026 :   INFO) Hello World! (seq=548)
+    Tue Jan 15 15:56:03.291 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00027 :   INFO) Hello World! (seq=549)
+    Tue Jan 15 15:56:04.292 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00028 :   INFO) Hello World! (seq=550)
+    Tue Jan 15 15:56:05.293 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00029 :   INFO) Hello World! (seq=551)
+    Tue Jan 15 15:56:06.294 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00030 :   INFO) Hello World! (seq=552)
+    Tue Jan 15 15:56:07.296 2013 (SCNodeI0.4275 : csa103CompEO0.---.---.00031 :   INFO) Hello World! (seq=553)
+    ...
+
+What these logs show is process 4276 as active up to sequence number 546. Then We killed the process and so the AMF assigned process 
+4275 as active. This process read the checkpoint and continued with sequence number 547. Next, the AMF restarted the killed component 
+as process 5621 and assigned it standby. Finally the system entered into a steady state with process 4275 as active and 5621 as standby.
+
+Next, you can try killing the active again, or the standby and examine the behavior of the system.
+
+Stop csa103
+^^^^^^^^^^^
+To stop csa103 use the following SAFplus Platform Console command:
+
+.. code-block:: text
+
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa103SGI0
+
+Now change the state of csa103SGI0 to LockInstantiation and close the SAFplus Platform Console.
+
+.. code-block:: text
+
+    cli[Test:SCNodeI0:CPM]-> amsLockInstantiation sg csa103SGI0
+    cli[Test:SCNodeI0:CPM]-> end
+    cli[Test:SCNodeI0]-> end
+    cli[Test]-> bye
+
+Additional Experiments
+----------------------
+
+* In the multi-node configuration, you can try a node failure instead of a process failure. To do this, either run 
+  "etc/init.d/safplus stop" or power the node off.
+* Have the active write to more than one checkpoint section.
+* Study and experiment with the other checkpoint modes -- collocated verses non-collocated and asynchronous verses synchronous.
+* Examine the SAFplus hot-checkpoint extension. Please contact us for a hot-checkpoint example application.
+
+Summary and References
+----------------------
+We've seen :
+
+* how to use the OpenClovis SAFplus checkpoint service to save some program state and recover that state from a separate process
+* how to initialize the client checkpoint library
+* how to integrate the checkpoint with the AMF active/standby work assignments so that the "active" process recovers prior checkpoint data and becomes the active replica.
+* how to create and open checkpoints
+* how to create and use sections in an opened checkpoint
+* how to use a single dispatch loop to handle dispatches for multiple libraries.
+
+Further information can be found within the following: **OpenClovis API Reference Guide**.

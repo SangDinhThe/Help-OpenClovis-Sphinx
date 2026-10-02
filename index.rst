@@ -26,7 +26,7 @@ If you are looking for the SAFplus Platform Product itself, please download the 
    Doc Central
    source/relnotes
    source/installguide
-   SAFplus Platform Tutorials
-   SAF API Tutorials
+   source/tutorial
+   source/evalguide
    FAQ
 

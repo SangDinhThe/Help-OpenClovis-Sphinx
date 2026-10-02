@@ -32,6 +32,7 @@ html_favicon = '_static/logo/cropped-opencloivs-logo-1.png'
 html_css_files = [
     'css/headings.css',
     'css/tables.css',
+    'css/imgs.css',
 ]
 html_theme_options = {
 #    'logo_only': True,

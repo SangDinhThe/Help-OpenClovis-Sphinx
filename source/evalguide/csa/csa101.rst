@@ -1,0 +1,4 @@
+csa101 Creating Basic SA-Forum Compliant Applications
+=====================================================
+This module csa101: Creating a basic SA-Forum Application, has been expanded into the Sample Application Tutorial available here: 
+**Sample Application Tutorial**

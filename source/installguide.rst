@@ -3,27 +3,14 @@ Install Guide
 
 Preface
 -------
-Welcome to OpenClovis Release Notes. This document provides information about the details of the platforms on which OpenClovis 
-SAFplus Availability/Scalability Platform (the SAFplus Platform for short) and Integrated Development Environment (IDE) have 
-been tested and validated for SDK Release 6.0. It contains the additional features and enhancements of the product since the 
-previous release. It also summarizes the known issues and limitations of the product and provides workaround wherever applicable.
-
-Key Topics
-^^^^^^^^^^
-OpenClovis Release Notes covers the following topics in details:
-
-* Tested Platforms
-* What Is New
-* Migration To Latest Version
-* Known Issues
-* Environment Related Observation
-* Documentation Issues
+SAFplus Platform Installation Guide guide provides the system requirements, installation procedure for SAFplus Platform software 
+development kit (SDK) and the Evaluation System.
 
 Audience
 ^^^^^^^^
-OpenClovis Release Notes addresses system integrators, designers, and system architects. To use SAFplus Platform, you must be aware 
-of the fundamentals of operation, management, and configuration of telecom and networking domains. You must also be familiar with 
-C programming, UML notations, and have basic knowledge of Linux.
+SAFplus Platform Installation Guide is designed for system integrators, designers, and system architects. To use the product, you 
+must be aware of the fundamentals of design, development, operation, management and configuration of telecommunication and 
+networking systems. You must also be familiar with C programming, UML notations, and have the basic knowledge of Linux.
 
 .. TODO: Documentation Conventions and refs in Related Documents. Colored headings
  
@@ -36,7 +23,7 @@ For additional information about OpenClovis products, refer to the following gui
 * :ref:`SAFplus Platform Release Notes <rl-nt-label>` provides information about the software and the hardware required to install OpenClovis Application Service Platform (SAFplus Platform) and Integrated Development Environment (IDE). It summarizes the additional features and enhancements of the product since the previous release. It also summarizes the issues and limitations of the product and provides workarounds wherever applicable.
 * **SAFplus Platform SA-Forum Compliance** describes the level of compliance of OpenClovis SAFplus Platform and its Application Programming Interface (API) with the relevant Service Availability Forum Specifications.
 * **SAFplus Platform Installation Guide** provides the system requirements, installation procedure for OpenClovis SAFplus Platform, IDE, and the Evaluation System.
-* **SAFplus Platform Sample Application** Tutorial explains the steps to create and build a sample model using OpenClovis IDE and OpenClovis SAFplus Platform. It also provides troubleshooting information for this process. This provides the logical first step in understanding the SAFplus Platform offering.
+* **SAFplus Platform Sample Application Tutorial** explains the steps to create and build a sample model using OpenClovis IDE and OpenClovis SAFplus Platform. It also provides troubleshooting information for this process. This provides the logical first step in understanding the SAFplus Platform offering.
 * **SAFplus Platform Evaluation System User Guide** provides all the required information to configure and run the sample models packaged within the Evaluation System. This document also provides good understanding of OpenClovis SAFplus Platform's functionality. This is the natural follow on to the OpenClovis Sample Application Tutorial as it builds on the example created in that document.
 * **SAFplus Platform SDK User Guide** provides information about SAFplus Availability/Scalability Platform architecture, various SAFplus Platform components, and their interactions. This guide helps you to configure the OpenClovis SAFplus Platform components, compile, and execute the SAFplus Platform code to build your custom application.
 * **SAFplus Platform IDE User Guide** describes the usage of Integrated Development Environment (IDE), a graphical development environment that complements the SAFplus Platform. This guide helps you to understand how to use the various features of the IDE to build the application.
