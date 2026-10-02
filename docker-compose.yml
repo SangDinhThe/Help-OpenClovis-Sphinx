@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  docs:
+    build: .
+    container_name: running-help-oc
+    ports:
+      - "80:80"
+    restart: always
