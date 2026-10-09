@@ -1,3 +1,5 @@
+.. _saf-pls-tut-label:
+
 SAFplus Platform Tutorial
 =========================
 
@@ -94,14 +96,14 @@ simply enter cl-ide from any directory. If you did not create symbolic links dur
 
 * Add the installation directory to the shells search path and then launch the IDE. For example with a bash shell,
 
-  .. code-block:: text
+  .. code-block:: console
 
     # export PATH=$PATH:$install_dir/6.1/sdk/bin
     # cl-ide
 
 * Or execute the command
 
-  .. code-block:: text
+  .. code-block:: console
 
     # <install_dir>/6.1/sdk/bin/cl-ide
 
@@ -484,7 +486,7 @@ To replace the generated files with the customized versions shipped with the SAF
     #. Exit the SAFplus Platform IDE using the File > Exit menu item. If you are prompted to save changes before exiting answer yes.
     #. Navigate to the source code work area.
 
-        .. code-block:: text
+        .. code-block:: console
 
             # cd /home/clovis/projectarea1/ide_workspace/SampleModel/src/app
 
@@ -492,38 +494,38 @@ To replace the generated files with the customized versions shipped with the SAF
     #. Add the following line to this file within the first BEGIN_APPLICATION_CODE and END_APPLICATION_CODE comment block. This will 
        instruct the build process to build our custom output library.
 
-        .. code-block:: text
+        .. code-block:: bash
 
             SUBDIRS += ev
 
     #. Save this file and exit the editor.
     #. Execute the following command to copy the output package to our working area.
 
-        .. code-block:: text
+        .. code-block:: console
 
             # cp -r <eval_dir>/src/app/ev .
 
     #. Navigate to the component code work area.
 
-        .. code-block:: text
+        .. code-block:: console
 
             # cd csa101
 
     #. Execute the following command to copy the csa101 source code.
 
-        .. code-block:: text
+        .. code-block:: console
 
             # cp <eval_dir>/src/app/csa101Comp/main.c .
 
     #. Execute the following command to copy the component make file.
 
-        .. code-block:: text
+        .. code-block:: console
 
             # cp <eval_dir>/src/app/csa101Comp/Makefile .
 
     #. Restart the SAFplus Platform IDE.
 
-        .. code-block:: text
+        .. code-block:: console
 
             # cl-ide
 
@@ -941,14 +943,14 @@ deploy the runtime image.
 
 1. First we create a directory where we will install the image. In our case we will use /root/asp.
 
-  .. code-block:: text
+  .. code-block:: console
 
     # cd /root
     # mkdir asp
 
 2. Next we navigate to that directory and untar the deployment package.
 
-  .. code-block:: text
+  .. code-block:: console
 
     # cd /root/asp
     # tar xzvf /home/clovis/projectarea1/target/SampleModel/images/SCNodeI0.tgz
@@ -970,7 +972,7 @@ To start SAFplus Platform on System Controller node.
 1. Open a shell.
 2. Run the following commands
 
-  .. code-block:: text
+  .. code-block:: console
 
     # cd /root/asp
     # etc/init.d/asp start
@@ -1031,13 +1033,13 @@ To use the SAFplus Platform Console:
    a machine other than the development machine.)
 #. Change to image bin directory:
 
-   .. code-block:: text
+   .. code-block:: console
 
         # cd /root/asp/bin
 
 #. Start the SAFplus Platform Console
 
-   .. code-block:: text
+   .. code-block:: console
 
         # ./asp_console
 
@@ -1057,7 +1059,7 @@ To use the SAFplus Platform Console:
 
 #. Now lets tail the application log file so that we can see whats going on. In another window, as root, run:
 
-   .. code-block:: text
+   .. code-block:: console
 
         # tail -f /root/asp/var/log/csa101I0Log.latest
 
@@ -1174,7 +1176,7 @@ To stop SAFplus Platform on the System Controller
 #. ssh into the System Controller node as root.
 #. Once logged in, run the following command
 
-   .. code-block:: text
+   .. code-block:: console
 
         # cd /root/asp
         # etc/init.d/asp stop
@@ -1286,7 +1288,7 @@ Below is a description of the values in the settings in the target.conf file.
 
    we would specify the node instance details as:
 
-   .. code-block:: text
+   .. code-block:: bash
 
       SLOT_SCNodeI0=1
       SLOT_PayloadNodeI0=3

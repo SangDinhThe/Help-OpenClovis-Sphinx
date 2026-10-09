@@ -1,3 +1,5 @@
+.. _ins-gd-label:
+
 Install Guide
 =============
 
@@ -200,7 +202,7 @@ Before you install:
 
 To extract the SDK package, execute the following command:
 
-.. code-block::
+.. code-block:: console
 
     # tar -xzmf openclovis-safplus-sdk-*.tar.gz
 
@@ -219,7 +221,7 @@ supports most major RedHat and Debian (Ubuntu) based distributions.
 
 Please run the install script corresponding with your Linux distribution by executing the following commands:
 
-.. code-block::
+.. code-block:: console
 
     # cd openclovis-safplus-sdk-*
     # ./install
@@ -299,7 +301,7 @@ Note, some distributions (notably Red Hat) obsolete the kernel header files rapi
 you upgrade your Linux kernel, if it has determined that it will need the kernel headers (these are only needed for the TIPC 
 communications subsystem, which comes with the kernel on all modern Linux distributions).
 
-Next, the installer will install required dependencies from the "thirdparty-*" archive. If you did not download this archive, the 
+Next, the installer will install required dependencies from the "thirdparty-\*" archive. If you did not download this archive, the 
 installer will download it automatically. These dependencies are not universally available in all Linux distributions so are 
 provided by us.
 
@@ -430,14 +432,14 @@ downloaded to "/var/cache/apt/archives". It is recommended to remove (or move) a
 cache, and so it will contain any packages that you have previously installed), so that the directory contains just the packages 
 needed for the OpenClovis SDK:
 
-.. code-block:: text
+.. code-block:: bash
 
     rm /var/cache/apt/archives/*
 
 Next edit the preinstall-ubuntu.sh script, search for all instances of "apt-get" and add the flags "-d --reinstall" just after the 
 "apt-get" program. For example:
 
-.. code-block:: text
+.. code-block:: bash
 
     apt-get -d --reinstall -y --force-yes install build-essential
 
@@ -463,20 +465,20 @@ Now copy these files to a new directory in your unconnected machine.
 
 On the connected machine:
 
-.. code-block:: text
+.. code-block:: bash
 
     root@desktop:/# cp /var/cache/apt/archives/*.deb <your flash media>
 
 On the unconnected machine:
 
-.. code-block:: text
+.. code-block:: bash
 
     root@desktop:/# mkdir /root/pkgs
     root@desktop:/# cp <your flash media> /root/pkgs/
 
 Finally, install them using the standard "dpkg" package installer:
 
-.. code-block:: text
+.. code-block:: bash
 
     root@desktop :/# cd /root/pkgs
     root@desktop:~/pkgs# dpkg -i *.deb

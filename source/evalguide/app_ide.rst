@@ -127,7 +127,7 @@ at Chapter **Building the Evaluation System and Deploying Runtime Images**:
   Provides details on how to configure and build SAFplus Platform and the generated model. One small difference here is that when 
   we run <install_dir>/6.1/sdk/src/SAFplus/configure -with-model-name it should be run with the generated eval model. E.g.:
 
-  .. code-block:: text
+  .. code-block:: console
 
     $ <install_dir>/6.1/sdk/src/SAFplus/configure --with-asp-build --with-model-name=eval
 

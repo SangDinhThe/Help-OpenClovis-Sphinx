@@ -60,7 +60,7 @@ well-known name for the row.
     extern SaCkptSectionIdT ckpt_sid;
 
 Initialization
---------------
+^^^^^^^^^^^^^^
 Initialization follows the standard SA-Forum library lifecycle pattern where before use an initialize call must occur that returns 
 a handle that is used in subsequent library accesses.
 
@@ -153,7 +153,7 @@ redundant application start, their initialization routines are racing each other
 necessary to specify the SA_CKPT_CHECKPOINT_CREATE (in all processes) to ensure that whichever process wins will create the checkpoint.
 
 Writing
--------
+^^^^^^^
 Writing to a checkpoint section can fail if the section does not exist or if the process is not the checkpoint's "active replica". 
 The active replica is essentially the checkpoint table's "master" copy and is only needed for checkpoints that are configured to 
 allow only one writer. The active replica is assigned via a simple API call that is wrapped here:
@@ -244,7 +244,7 @@ The async API is currently enabled simply do demonstrate the proper function of 
 (see the "Putting it all Together" section).
 
 Reading
--------
+^^^^^^^
 Reading the checkpoint is quite simple. The API allows for reads of multiple sections and allows subsets of the section's data to 
 be read so an "IO-vector" style data structure is first initialized. To do multiple-section reads, this data structure should be an 
 array of SaCkptIOVectorElementT. But in this example we only read a single section so an array is not needed.
@@ -284,7 +284,7 @@ the application, but is a common design to see missing sections on application s
 checkpoint. In this design, it is only on failover that the sections will have been written.
 
 Putting it all Together
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 These functions are called from the application's clCompAppMain.c file to implement an application that simply prints a sequence 
 count. But this count is checkpointed so it is not affected by process failure!
 
@@ -467,7 +467,7 @@ First, on the active System Controller move it to state LockAssignment with (Unl
 
 The following output is given when you run tail -f on both of the csa103 log files simultaneously:
 
-.. code-block:: text
+.. code-block:: console
 
     # tail -f var/log/csa103CompI?Log.latest
 

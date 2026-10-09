@@ -1,0 +1,585 @@
+csa104 Messaging
+================
+Messaging refers to communications between components within the cluster. SAFplus provides a SA-Forum compliant implementation of 
+the messaging service. In one sentence, the messaging service is a reliable packet based communications mechanism which stores and 
+addresses endpoints via cluster-wide message queues that are identified by a well-known name and can be bound to any running process. 
+For more details and API reference please see the SA-Forum spec SA-AIS-MSG-B*.pdf.
+
+Objective
+---------
+csa104 demonstrates the use of the SAFplus Messaging service to provide basic communications during process and node failure.
+
+What Will You Learn
+-------------------
+
+* how to initialize the messaging client library,
+* how to create a message queue.
+* how to send messages to the queue.
+* how to receive messages from the queue.
+* how to take over the message queue after process failure.
+
+The Code
+--------
+The code can be found within the following directory:
+
+.. code-block:: text
+
+    <SAFplus_installation_dir>/src/examples/eval/src/app/csa104Comp
+
+To increase readability, all messaging code has been isolated into a single module that consists of 2 files: msgFns.c and msgFns.h. 
+These files provide the following APIs.
+
+.. code-block:: c
+    :caption: msgFns.h
+
+    void        msgInitialize(void);
+    SaAisErrorT msgOpen(const char* queuename,int bytesPerPriority);
+    SaAisErrorT msgSend(const char* queuename, void* buffer, int length);
+    void*       msgReceiverLoop(void * notused);
+
+These APIs constitute the basic operations required by any application that uses messaging; initialize, open, send and receive.
+
+The following constants are also defined:
+
+.. code-block:: c
+    :caption: msgFns.h
+
+    #define ACTIVE_COMP_QUEUE "csa104msgqueue"
+    #define QUEUE_LENGTH 2048
+
+The ACTIVE_COMP_QUEUE defines the well-known name of the messaging queue which will be used in this example. The QUEUE_LENGTH defines 
+the maximum size of the buffer allocated for each priority within a particular queue. There are 4 possible message priorities and 
+the maximum buffer size can be set on a per priority basis.
+
+Initialization
+^^^^^^^^^^^^^^
+Initialization follows the standard SA Forum library lifecycle pattern:
+
+.. code-block:: c
+    :caption: msgFns.c
+
+    void msgInitialize(void)
+    {
+        SaAisErrorT             Rc;
+        SaMsgCallbacksT         MsgCallbacks = {
+                                    .saMsgQueueOpenCallback           = (SaMsgQueueOpenCallbackT) 0,
+                                    .saMsgQueueGroupTrackCallback     = (SaMsgQueueGroupTrackCallbackT) 0,
+                                    .saMsgMessageDeliveredCallback    = (SaMsgMessageDeliveredCallbackT) 0,
+                                    .saMsgMessageReceivedCallback     = (SaMsgMessageReceivedCallbackT) 0,
+                                };
+        SaVersionT              Version = {
+                                    .majorVersion = 1,
+                                    .minorVersion = 1,
+                                    .releaseCode  = 'B',
+                                };
+
+        Rc = saMsgInitialize (&msgLibraryHandle, &MsgCallbacks, &Version);
+        if ( SA_AIS_OK != Rc)
+        {
+            clprintf ( CL_LOG_SEV_ERROR, "Init failed [0x%X]", Rc);
+            assert(0);
+        }
+    }
+
+The messaging library supports either a callback or threaded paradigm. In this example, we will use threading so no callbacks are 
+installed and therefore it is not necessary to periodically call saMsgDispatch(...).
+
+To receive messages from the queue, the application must first open it. The open essentially binds the well-known name to the 
+application process so that senders know where to direct messages. By providing an explicit bind operation (rather then folding it 
+into the library initialize) the API allows the application to choose when it takes ownership of the queue; this could be when it 
+becomes active (or standby) for example, allowing senders to address messages to a single well-known queue name if they need to 
+communicate with the active component.
+
+Designing addresses that represent a concept such as "The currently active transaction server" rather then a physical entity is an 
+extremely powerful design pattern used throughout highly available applications because it means that the sender does not need to 
+access the real-time cluster state to determine this mapping and does not need to handle errors caused by application failure 
+(except perhaps with a simple retry-on-error loop).
+
+.. code-block:: c
+    :caption: msgFns.c
+
+    SaAisErrorT msgOpen(const char* queuename,int bytesPerPriority)
+    {
+        SaAisErrorT             rc;
+        SaNameT                 saQueueName;
+        SaMsgQueueCreationAttributesT   CreationAttributes;
+        
+        saQueueName.length=strlen(queuename);
+        memcpy(saQueueName.value,queuename,saQueueName.length+1);
+
+        SaMsgQueueOpenFlagsT    OpenFlags = SA_MSG_QUEUE_CREATE;
+        
+        CreationAttributes.creationFlags = 0;
+        for (int i=0;i<SA_MSG_MESSAGE_LOWEST_PRIORITY;i++)
+            CreationAttributes.size[i] = bytesPerPriority;
+        CreationAttributes.retentionTime = 0;
+
+        rc = saMsgQueueOpen (msgLibraryHandle, &saQueueName, & CreationAttributes, OpenFlags, SA_TIME_MAX, &msgQueueHandle);
+        if (SA_AIS_OK != rc)
+        {
+            clprintf ( CL_LOG_SEV_ERROR, "Msg QueueOpen failed [0x%X]\n\r", rc);
+        }
+        return rc;
+    }
+
+Transmission
+^^^^^^^^^^^^
+Message transmission uses the saMsgMessageSend API which allows the application to pass a message buffer and a bunch of meta-data 
+(such as message version, sender's name, etc) that will be sent to the receiver:
+
+.. code-block:: c
+    :caption: msgFns.c
+
+    SaAisErrorT msgSend(const char* queuename, void* buffer, int length)
+    {
+        SaAisErrorT             rc;
+        SaNameT                 saQueueName;
+        SaMsgMessageT           message;
+
+        /* Load the SAF string */
+        saQueueName.length=strlen(queuename);
+        memcpy(saQueueName.value,queuename,saQueueName.length+1);
+
+        /* Load the SAF message structure */
+        message.type = 0;
+        message.version.releaseCode = 0;
+        message.version.majorVersion=0;
+        message.version.minorVersion=0;
+        message.senderName = 0;  /* You could put a SaNameT* in here if you wanted to pass a reply queue (for example) */
+        message.size = length;
+        message.data = buffer;
+        message.priority = SA_MSG_MESSAGE_HIGHEST_PRIORITY;
+        rc = saMsgMessageSend (msgLibraryHandle, &saQueueName, &message, SA_TIME_MAX);
+        if (SA_AIS_OK != rc)
+        {
+            /* Error 0xC here means that the queue has not yet been created.
+            That is, the receiver is not yet listening. */
+            clprintf ( CL_LOG_SEV_ERROR, "Msg saMsgMessageSend to queue [%s] failed [0x%X]", saQueueName.value,rc );
+        }
+        return rc;
+    }
+
+For simplicity, this example creates the destination SaNameT and the SaMsgMessageT structures each time a message is sent. However, 
+for efficiency when sending multiple messages to the same destination it is preferred to pre-create and reuse these objects.
+
+Receipt
+^^^^^^^
+This example will create a dedicated message receiver thread and run the following code within that thread:
+
+.. code-block:: c
+    :caption: msgFns.c
+
+    void* msgReceiverLoop(void * notused)
+    {
+        SaAisErrorT             rc;
+        SaNameT                 SenderName;
+        char                    Data[1024];
+        SaMsgSenderIdT          SenderId;
+        SaTimeT                 SendTime;
+        
+        while(1)
+        {
+            
+            SaMsgMessageT           message = {
+                .size       = 1024,
+                .senderName = &SenderName,
+                .data       = Data,
+            };
+        
+            rc = saMsgMessageGet (msgQueueHandle, &message, & SendTime, & SenderId, SA_TIME_MAX);
+            if (SA_AIS_OK != rc)
+            {
+                clprintf ( CL_LOG_SEV_ERROR, "Msg saMsgMessageGet failed [0x%X]\n\r", rc );
+                break;
+            }
+            
+            if (message.senderName->length)
+            {
+                clprintf ( CL_LOG_SEV_INFO, "Sender Name   : %s\n", message.senderName->value);
+            }
+            clprintf ( CL_LOG_SEV_INFO, "Received Message  : %s\n", (char *)message.data);
+            
+        }
+        
+        rc = saMsgQueueClose (msgQueueHandle);
+        if (SA_AIS_OK != rc)
+        {
+            clprintf ( CL_LOG_SEV_ERROR, "Msg Queue Close failed [0x%X]\n\r", rc );
+        }
+        return 0;
+    
+    }
+
+This code simply loops "forever" receiving messages and printing the contents of the message. If anything goes wrong it kicks itself 
+out of the message processing loop and closes the message queue. Closing the queue will allow some other application to open it, in 
+effect "taking over" the queue. If an application is killed or disappears due to node death (or other events) the AMF will close all 
+queues opened by the application. This allow the new active application to take control of the queue.
+
+Putting it all Together
+^^^^^^^^^^^^^^^^^^^^^^^
+These functions are called from the application's clCompAppMain.c file to implement an application that periodically sends a message 
+from the standby to the active application. First we define a helper function that will repeatedly send messages. This function will 
+loop so long as the application is standby, as indicated by a global variable "standby" that is set in the work assignment callback.
+
+.. code-block:: c
+    :caption: clCompAppMain.c
+
+    void* senderLoop(void* p)
+    {
+        int count =0;
+        char msg[100];
+        while (standby)
+        {
+            count++;
+            snprintf(msg,99,"Msg %4d from %.*s",count,appName.length,appName.value);
+            
+            clprintf(CL_LOG_SEV_INFO,"csa104: Sending Message: %s",msg);
+            msgSend(ACTIVE_COMP_QUEUE,msg,strlen(msg)+1);
+            sleep(2);
+        }
+        return NULL;
+    }
+
+Next, we initialize the messaging library from main():
+
+.. code-block:: c
+    :caption: clCompAppMain.c
+
+    ...
+        /*
+        * Now register the component with AMF. At this point it is
+        * ready to provide service, i.e. take work assignments.
+        */
+
+        if ( (rc = saAmfComponentNameGet(amfHandle, &appName)) != SA_AIS_OK) 
+            goto errorexit;
+        if ( (rc = saAmfComponentRegister(amfHandle, &appName, NULL)) != SA_AIS_OK) 
+            goto errorexit;
+
+        /*
+        * Initialize the log stream
+        */
+        clEvalAppLogStreamOpen((ClCharT*)appName.value, &gEvalLogStream);
+
+        msgInitialize();
+        
+        /*
+        * Print out standard information for this component.
+        */
+
+        clEoMyEoIocPortGet(&iocPort);
+    ...
+
+In the work assignment callback, we open the queue and spawn the message receiver thread when an active assignment is received, and 
+spawn a message sender thread when a standby assignment is received.
+
+.. code-block:: c
+    :caption: clCompAppMain.c
+
+    void clCompAppAMFCSISet(SaInvocationT       invocation,
+                            const SaNameT       *compName,
+                            SaAmfHAStateT       haState,
+                            SaAmfCSIDescriptorT csiDescriptor)
+    {
+        /*
+        * Print information about the CSI Set
+        */
+
+        clprintf (CL_LOG_SEV_INFO, "Component [%.*s] : PID [%d]. CSI Set Received\n", 
+                compName->length, compName->value, mypid);
+
+        clCompAppAMFPrintCSI(csiDescriptor, haState);
+
+        /*
+        * Take appropriate action based on state
+        */
+
+        switch ( haState )
+        {
+            case SA_AMF_HA_ACTIVE:
+            {
+                /*
+                * AMF has requested application to take the active HA state 
+                * for the CSI.
+                */
+                pthread_t thr;
+                
+                clprintf(CL_LOG_SEV_INFO,"csa104: ACTIVE state requested; activating message queue receiver service");
+                running = 1;
+                msgOpen(ACTIVE_COMP_QUEUE,QUEUE_LENGTH);
+                pthread_create(&thr,NULL,msgReceiverLoop,NULL);
+                
+                saAmfResponse(amfHandle, invocation, SA_AIS_OK);
+                break;
+            }
+
+            case SA_AMF_HA_STANDBY:
+            {
+                /*
+                * AMF has requested application to take the standby HA state 
+                * for this CSI.
+                */
+                pthread_t thr;
+                clprintf(CL_LOG_SEV_INFO,"csa104: Standby state requested");
+                running = 0;
+                standby = 1;
+                pthread_create(&thr,NULL,senderLoop,NULL);
+
+                saAmfResponse(amfHandle, invocation, SA_AIS_OK);
+                break;
+            }
+    ...
+
+How to Run csa104 and What to Observe
+-------------------------------------
+This sample application runs 2 processes on SCNodeI0 (first system controller) in all the hardware setups described at the beginning 
+of this eval guide. While it is certainly possible to run messaging across multiple nodes, this single node configuration makes 
+evaluation simpler.
+
+csa104 is "enabled" by default when SAFplus is started so there is no need to enter the SAFplus Debug Console and change its program 
+state.
+
+
+The following output is given when you run tail -f on the csa104 log files. For example:
+
+.. code-block:: console
+
+    # ./eval start
+    # tail -f var/log/csa104CompI?Log.latest
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa103CompI?Log.latest
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:38:45.215 2013 (SCNodeI0.3301 : csa104Comp.---.---.00009 :   INFO) Name value pairs :
+    Fri Jan 11 14:38:45.215 2013 (SCNodeI0.3301 : csa104Comp.---.---.00010 :   INFO) HA state : [Active]
+    Fri Jan 11 14:38:45.215 2013 (SCNodeI0.3301 : csa104Comp.---.---.00011 :   INFO) Active Descriptor :
+    Fri Jan 11 14:38:45.215 2013 (SCNodeI0.3301 : csa104Comp.---.---.00012 :   INFO) Transition Descriptor : [1]
+    Fri Jan 11 14:38:45.215 2013 (SCNodeI0.3301 : csa104Comp.---.---.00013 :   INFO) Active Component : [csa104CompI0]
+    Fri Jan 11 14:38:45.215 2013 (SCNodeI0.3301 : csa104Comp.---.---.00014 :   INFO) csa104: ACTIVE state requested; activating message queue receiver service
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3301 : csa104Comp.---.---.00015 :   INFO) Received Message  : Msg    1 from csa104CompI1
+
+    Fri Jan 11 14:38:47.251 2013 (SCNodeI0.3301 : csa104Comp.---.---.00016 :   INFO) Received Message  : Msg    2 from csa104CompI1
+
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00007 :   INFO) CSI Flags : [Add One]
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00008 :   INFO) CSI Name : [csa104CSII]
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00009 :   INFO) Name value pairs :
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00010 :   INFO) HA state : [Standby]
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00011 :   INFO) Standby Descriptor :
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00012 :   INFO) Standby Rank : [1]
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00013 :   INFO) Active Component : [csa104CompI0]
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00014 :   INFO) csa104: Standby state requested
+    Fri Jan 11 14:38:45.250 2013 (SCNodeI0.3302 : csa104Comp.---.---.00015 :   INFO) csa104: Sending Message: Msg    1 from csa104CompI1
+    Fri Jan 11 14:38:47.251 2013 (SCNodeI0.3302 : csa104Comp.---.---.00016 :   INFO) csa104: Sending Message: Msg    2 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:38:49.252 2013 (SCNodeI0.3301 : csa104Comp.---.---.00017 :   INFO) Received Message  : Msg    3 from csa104CompI1
+
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:38:49.252 2013 (SCNodeI0.3302 : csa104Comp.---.---.00017 :   INFO) csa104: Sending Message: Msg    3 from csa104CompI1
+    Fri Jan 11 14:38:51.253 2013 (SCNodeI0.3302 : csa104Comp.---.---.00018 :   INFO) csa104: Sending Message: Msg    4 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:38:51.253 2013 (SCNodeI0.3301 : csa104Comp.---.---.00018 :   INFO) Received Message  : Msg    4 from csa104CompI1
+
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:38:53.253 2013 (SCNodeI0.3302 : csa104Comp.---.---.00019 :   INFO) csa104: Sending Message: Msg    5 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:38:53.254 2013 (SCNodeI0.3301 : csa104Comp.---.---.00019 :   INFO) Received Message  : Msg    5 from csa104CompI1
+
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:38:55.254 2013 (SCNodeI0.3302 : csa104Comp.---.---.00020 :   INFO) csa104: Sending Message: Msg    6 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:38:55.255 2013 (SCNodeI0.3301 : csa104Comp.---.---.00020 :   INFO) Received Message  : Msg    6 from csa104CompI1
+
+The logs show the work assignment occurring with csa104CompI0 as ACTIVE and csa104CompI1 as STANDBY. This causes the csa104CompI1 
+(standby) component to start sending messages and the csa104CompI0 (active) component to begin receiving them.
+
+.. note::
+    Sometimes the output shows a double send, double receive or even a receive before a send! This is an effect of the tail program 
+    polling the logs and not an actual issue.
+
+Next, find the active csa104 process and kill it. In this case, its the one that's receiving the messages. The process ID is available 
+in the log which is formmated as follows:
+
+.. code-block:: text
+
+    date                         (Node    .PID  : compname.---.---.logCount : SEVERITY) Message
+    Fri Jan 11 14:38:55.255 2013 (SCNodeI0.3301 : csa104Comp.---.---.00020 :   INFO) Received Message  : Msg    6 from csa104CompI1
+
+So in the log above the active process is pid 3301.
+
+While keeping the tail running, open a new window and run the kill command:
+
+.. code-block:: console
+
+    # kill 3301
+
+After killing the active component you should see lines in the log files like the following:
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa103CompI1Log.latest
+
+    root@gh-lubuntu1204:~/eval# tail -f var/log/csa104CompI?Log.latest
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:43:19.398 2013 (SCNodeI0.3302 : csa104Comp.---.---.00152 :   INFO) csa104: Sending Message: Msg  138 from csa104CompI1
+    Fri Jan 11 14:43:21.399 2013 (SCNodeI0.3302 : csa104Comp.---.---.00153 :   INFO) csa104: Sending Message: Msg  139 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:43:21.400 2013 (SCNodeI0.3301 : csa104Comp.---.---.00153 :   INFO) Received Message  : Msg  139 from csa104CompI1
+
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:43:23.400 2013 (SCNodeI0.3302 : csa104Comp.---.---.00154 :   INFO) csa104: Sending Message: Msg  140 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:43:23.401 2013 (SCNodeI0.3301 : csa104Comp.---.---.00154 :   INFO) Received Message  : Msg  140 from csa104CompI1
+
+    Fri Jan 11 14:43:25.158 2013 (SCNodeI0.4069 : csa104Comp.---.---.00001 :   INFO) Component [csa104CompI0] : PID [4069]. Initializing
+
+    Fri Jan 11 14:43:25.158 2013 (SCNodeI0.4069 : csa104Comp.---.---.00002 :   INFO)    IOC Address             : 0x1
+
+    Fri Jan 11 14:43:25.158 2013 (SCNodeI0.4069 : csa104Comp.---.---.00003 :   INFO)    IOC Port                : 0x89
+
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00004 :   INFO) csa102: Instantiated as component instance csa104CompI0.
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00005 :   INFO) csa104CompI0: Waiting for CSI assignment...
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00006 :   INFO) Component [csa104CompI0] : PID [4069]. CSI Set Received
+
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00007 :   INFO) CSI Flags : [Add One]
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00008 :   INFO) CSI Name : [csa104CSII]
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00009 :   INFO) HA state : [Active]
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00010 :   INFO) Active Descriptor :
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00011 :   INFO) Transition Descriptor : [1]
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00012 :   INFO) Active Component : [csa104CompI0]
+    Fri Jan 11 14:43:25.159 2013 (SCNodeI0.4069 : csa104Comp.---.---.00013 :   INFO) csa104: ACTIVE state requested; activating message queue receiver service
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:43:25.401 2013 (SCNodeI0.3302 : csa104Comp.---.---.00155 :   INFO) csa104: Sending Message: Msg  141 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:43:25.401 2013 (SCNodeI0.4069 : csa104Comp.---.---.00014 :   INFO) Received Message  : Msg  141 from csa104CompI1
+
+    Fri Jan 11 14:43:27.403 2013 (SCNodeI0.4069 : csa104Comp.---.---.00015 :   INFO) Received Message  : Msg  142 from csa104CompI1
+
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:43:27.403 2013 (SCNodeI0.3302 : csa104Comp.---.---.00156 :   INFO) csa104: Sending Message: Msg  142 from csa104CompI1
+
+As you can see, the messaging continues through the failure.
+
+But actually this service group was configured to demonstrate some advanced AMF failover semantics as well as messaging.
+
+As can be seen in the logs above, a failover did not happen. Instead, the active was restarted and reassigned active. This occurred 
+because this service group was configured to allow component restarts (in the IDE, look at the isRestartable field in the csa104Comp).
+
+However, the service group was configured so that multiple kills in quick succession will cause a failover. In particular, 2 failures 
+within 10 seconds will cause the fault to be elevated to the service unit level and a further 2 failures within 10 seconds will 
+elevate the failure to the service group level (and cause a fail over). These failure counts and time limits are configured in the 
+service group configuration dialog box.
+
+* By carefully selecting your failure elevation strategy, you direct the AMF to automatically use process restarts and therefore 
+  limit the scope of failures*
+
+So now, lets kill the process 4 times in a row. This can be done by quickly by watching the "tailed" logs and repeatedly killing the 
+process that receives messages:
+
+.. code-block:: console
+
+    # kill 4069
+    # kill 5566
+    # kill 5595
+    # kill 5691
+
+This causes the following logs:
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa103CompI1Log.latest
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:56:15.783 2013 (SCNodeI0.3302 : csa104Comp.---.---.00540 :   INFO) csa104: Sending Message: Msg  526 from csa104CompI1
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:56:15.784 2013 (SCNodeI0.5691 : csa104Comp.---.---.00018 :   INFO) Received Message  : Msg  526 from csa104CompI1
+
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:56:17.123 2013 (SCNodeI0.3302 : csa104Comp.---.---.00541 :   INFO) Component [csa104CompI1] : PID [3302]. CSI Set Received
+
+    Fri Jan 11 14:56:17.123 2013 (SCNodeI0.3302 : csa104Comp.---.---.00542 :   INFO) CSI Flags : [Target All]
+    Fri Jan 11 14:56:17.123 2013 (SCNodeI0.3302 : csa104Comp.---.---.00543 :   INFO) HA state : [Active]
+    Fri Jan 11 14:56:17.123 2013 (SCNodeI0.3302 : csa104Comp.---.---.00544 :   INFO) Active Descriptor :
+    Fri Jan 11 14:56:17.123 2013 (SCNodeI0.3302 : csa104Comp.---.---.00545 :   INFO) Transition Descriptor : [3]
+    Fri Jan 11 14:56:17.123 2013 (SCNodeI0.3302 : csa104Comp.---.---.00546 :   INFO) Active Component : [csa104CompI0]
+    Fri Jan 11 14:56:17.123 2013 (SCNodeI0.3302 : csa104Comp.---.---.00547 :   INFO) csa104: ACTIVE state requested; activating message queue receiver service
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.3302 : csa104Comp.---.---.00548 :   INFO) Received Message  : Msg    1 from csa104CompI0
+
+Above, we see that we have triggered a failover and the the standby process is being assigned active (note this is "Comp1" and has 
+the original pid of 3302).
+
+Next, the process is restarted and assigned standby:
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa103CompI1Log.latest
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00001 :   INFO) Component [csa104CompI0] : PID [5747]. Initializing
+
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00002 :   INFO)    IOC Address             : 0x1
+
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00003 :   INFO)    IOC Port                : 0x8d
+
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00004 :   INFO) csa102: Instantiated as component instance csa104CompI0.
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00005 :   INFO) csa104CompI0: Waiting for CSI assignment...
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00006 :   INFO) Component [csa104CompI0] : PID [5747]. CSI Set Received
+
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00007 :   INFO) CSI Flags : [Add One]
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00008 :   INFO) CSI Name : [csa104CSII]
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00009 :   INFO) Name value pairs :
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00010 :   INFO) HA state : [Standby]
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00011 :   INFO) Standby Descriptor :
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00012 :   INFO) Standby Rank : [1]
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00013 :   INFO) Active Component : [csa104CompI1]
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00014 :   INFO) csa104: Standby state requested
+    Fri Jan 11 14:56:17.155 2013 (SCNodeI0.5747 : csa104Comp.---.---.00015 :   INFO) csa104: Sending Message: Msg    1 from csa104CompI0
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:56:17.784 2013 (SCNodeI0.3302 : csa104Comp.---.---.00549 :   INFO) csa104: Sending Message: Msg  527 from csa104CompI1
+    Fri Jan 11 14:56:17.784 2013 (SCNodeI0.3302 : csa104Comp.---.---.00550 :   INFO) Received Message  : Msg  527 from csa104CompI1
+
+
+    ==> var/log/csa104CompI0Log.latest <==
+    Fri Jan 11 14:56:19.156 2013 (SCNodeI0.5747 : csa104Comp.---.---.00016 :   INFO) csa104: Sending Message: Msg    2 from csa104CompI0
+
+    ==> var/log/csa104CompI1Log.latest <==
+    Fri Jan 11 14:56:19.156 2013 (SCNodeI0.3302 : csa104Comp.---.---.00551 :   INFO) Received Message  : Msg    2 from csa104CompI0
+
+    Fri Jan 11 14:56:19.785 2013 (SCNodeI0.3302 : csa104Comp.---.---.00552 :   INFO) csa104: Sending Message: Msg  528 from csa104CompI1
+    Fri Jan 11 14:56:19.785 2013 (SCNodeI0.3302 : csa104Comp.---.---.00553 :   INFO) Received Message  : Msg  528 from csa104CompI1
+
+And message passing resumes!
+
+Further Investigation
+---------------------
+The following are a few changes that you can make to continue investigating the message service:
+
+* Add a new "reply" queue so the active can send the standby messages.
+* Use the saMsgMessageSendReceive and saMsgMessageReply functions to implement send/reply semantics.
+* Using the IDE, change the component's fault escalation behavior so that it fails over the first time the process is killed rather 
+  then restarting.
+* Investigate message queue groups.
+
+Summary and References
+----------------------
+We've seen :
+
+* How to use SAFplus Messaging to communicate between any 2 processes
+* How to take over a communications channel after a failover
+* Further information can be found within the following: SA-AIS-MSG-B* (SA-Forum Messaging Specification), 'OpenClovis API Reference 
+  Guide.

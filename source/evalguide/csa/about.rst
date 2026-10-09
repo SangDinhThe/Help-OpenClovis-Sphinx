@@ -111,7 +111,7 @@ To start SAFplus Platform on System Controller node.
 #. ssh into the System Controller node as root.
 #. once logged in, at /root run the following commands
 
-   .. code-block:: text
+   .. code-block:: console
 
       # cd asp
       # etc/init.d/asp start
@@ -155,7 +155,7 @@ To stop SAFplus Platform on the System Controller
 #. ssh into the System Controller node as root.
 #. once logged in, at /root run the following command
 
-.. code-block:: text
+.. code-block:: console
 
     # cd asp
     # etc/init.d/asp stop

@@ -1,0 +1,339 @@
+csa113 Event Publication
+========================
+
+Objective
+---------
+The objective is to learn how to write an event publishing application using Clovis' Event Manager API.
+
+What You Will Learn
+-------------------
+You will learn how to publish events using Clovis' Event Manager API.
+
+Code
+----
+
+.. code-block:: c
+    :caption: main.c
+
+    void
+    initializeAmf(void)
+    {
+        ...
+        const SaEvtCallbacksT evtCallbacks =
+        {
+            NULL,  /* Event open callback */
+            csa112Comp_appEventCallback  /* Event delivery callback */
+        };
+
+        
+        ...
+
+        /* Initialize AMF client library. */
+        if ( (rc = saAmfInitialize(&amfHandle, &callbacks, &version)) != SA_AIS_OK)
+            errorExit(rc);
+
+        ....
+
+In the initializeAmf function of this example we again see a call to saAmfInitialize. Everything initializeAmf function is the same 
+as before in csa112.
+
+.. code-block:: c
+    :caption: main.c
+
+    void
+    initializeAmf(void)
+    {
+
+        ...
+
+        // Open an event chanel so that we can subscribe to events on that channel
+        rc = saEvtChannelOpen(evtLibHandle, 
+                &evtChannelName, 
+                (SA_EVT_CHANNEL_PUBLISHER | 
+                 SA_EVT_CHANNEL_SUBSCRIBER | 
+                 SA_EVT_CHANNEL_CREATE), 
+                (SaTimeT)SA_TIME_END, 
+                &evtChannelHandle);
+
+Here we open the event channel. This is the same as in csa112.
+
+.. code-block:: c
+    :caption: main.c
+
+    void
+    initializeAmf(void)
+    {
+
+        ...
+
+        rc = saEvtEventAllocate(evtChannelHandle, &eventHandle);
+        if (rc != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "Failed to allocate event [0x%x]\n", rc);
+            assert(0);
+        }
+
+        rc = saEvtEventAttributesSet(eventHandle, 
+               NULL, 
+               1, 
+               0, 
+               &publisherName);
+        if (rc != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "Failed to set event attributes [0x%x]\n",rc);
+            assert(0);            
+        }
+
+The call to saEvtEventAllocate allocates an event header. This header is identified by the event handle passed back to 
+gTestInfo.eventHandle. The handle should be used any time the event header is to be used to manipulate the header, either by using 
+saEvtEventAttributesSet (right below), or to send an event using the header as in saEvtEventPublish. The call to saEvtEventAttributesSet 
+defines defines the priority to be 1 which is just below the highest priority of CL_EVENT_HIGHEST_PRIORITY which is defined as 0 where 
+CL_EVENT_LOWEST_PRIORITY is defined as 3. The retention time is specified as 0 since we don't want the event to be kept around if there 
+is no subscriber to pick it up. Finally the publisherName is specified because it's required. Our subscriber doesn't care who publishes 
+the events it receives.
+
+.. code-block:: c
+    :caption: main.c
+
+    int
+    main(int argc, 
+         char *argv[])
+    {
+
+        ...
+
+        while (!unblockNow)
+        {
+            /* csa113: If I am active then I'll publish an event.
+            Note, any application can publish and event regardless of
+            HA state.  This tutorial simply uses HA state so only
+            one of the two processes are publishing.
+            */
+        
+            if (running && ha_state == SA_AMF_HA_ACTIVE)
+            {
+                csa113Comp_PublishEvent();
+            }
+            /* Keep the event publish rate reasonable for this tutorial*/
+            sleep(1);  
+        }
+
+Here is the main loop. As long as the application is running and active we make a call to csa113Comp_PublishEvent. The work of the 
+application takes place in csa113Comp_PublishEvent, which is presented below.
+
+.. code-block:: c
+    :caption: main.c
+
+    static SaAisErrorT 
+    csa113Comp_PublishEvent()
+    {
+        SaEvtEventIdT   eventId         = 0;
+        static int      index           = 0;
+        SaSizeT         data_len        = 0;
+        SaAisErrorT	    rc              = SA_AIS_OK;
+        char            *data           = 0;
+        typedef void (*Generator)(char **, ClSizeT*);
+
+       // Note: to add a new generator, just define it above and then include
+       // the new functions name in the generators list.
+       // Next, maybe something that gets disk free info by way of getfsent
+       // and statfs?
+
+       static Generator generators[]   =
+       {
+           generate_time_of_day,
+           generate_load_average
+       };
+
+       // every time through increment index and then set index to
+       // it's value modulo the number of entries in the generators
+       // array.  This will cause us to cycle through the list of
+       // generators as we're called to publish events.
+       (*generators[index++])(&data, &data_len);
+       index %= (int)(sizeof generators / sizeof generators[0]);
+       if (data == 0 || data_len == 0)
+       {
+           clprintf(CL_LOG_SEV_ERROR, "No event data generated.");
+           return SA_AIS_ERR_NO_MEMORY;
+       }
+       clprintf(CL_LOG_SEV_INFO,"Publishing Event: %.*s\n",(int)data_len, data);
+       rc = saEvtEventPublish(eventHandle, (void *)data, data_len, &eventId);
+
+       if (rc != SA_AIS_OK)
+       {
+           clprintf(CL_LOG_SEV_ERROR,"Event publish attempt failed with error [%x]", rc);
+       }
+       clHeapFree(data);
+
+       return SA_AIS_OK;
+    }
+
+There's code to call one of a list of generator functions. The functions on the list, return a pointer and a length which are used to 
+pass to saEvtEventPublish. We pass the eventHandle prepared earlier with saEvtEventAllocate and saEvtEventAttributesSet. Pass the 
+pointer and the length that we get back from the generator function. Those are used to package up the event data and send it to any 
+subscribers. We also pass the address of the eventId local variable. This is required so that the saEvtEventPublish function can 
+return the event ID. We don't need it, so we promptly drop it in the bit bucket. Finally, we free the data that was allocated in the 
+generator function and passed back as we no longer need it.
+
+.. note::
+    Before building the project,copy the common directory which can be found under <eval_dir>/src/app to the working area
+
+    .. code-block:: console
+
+        # cp -r <eval_dir>/src/app/common  .
+
+How to Run csa113 and What to Observe
+-------------------------------------
+In csa113 you will be observing an event publishing application. This will be far more interesting if you observe an event subscription 
+application at the same time. For this we will use the example from csa112.
+
+Start up csa112
+^^^^^^^^^^^^^^^
+First you should start up csa112 and put it in a LockAssignment state so that it can receive events.(Unlock csa212SGI0 instead of 
+csa112SGI0 to run csa213).
+
+.. code-block:: console
+
+    # cd /root/asp/bin
+    # ./asp_console
+
+.. code-block:: text
+
+    cli[Test]-> setc 1
+    cli[Test:SCNodeI0]-> setc cpm
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa112SGI0
+    cli[Test:SCNodeI0:CPM]-> amsUnlock sg csa112SGI0
+
+In the csa112 application log you should see:
+
+.. code-block:: text
+    :caption: $ /root/asp/var/log/csa112CompI0Log.latest
+
+    Mon Jul 14 22:50:34 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00037 :   INFO)
+        csa112: Instantiated as component instance csa112CompI0.
+    Mon Jul 14 22:50:34 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00038 :   INFO)
+        csa112CompI0: Waiting for CSI assignment...
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00041 :   INFO)
+        Component [csa112CompI0] : PID [24830]. CSI Set Received
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00042 :   INFO)
+        CSI Flags               : [Add One]
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00043 :   INFO)
+        CSI Name                : [csa112CSII0]
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00044 :   INFO)
+        Name Value Pairs        :
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00045 :   INFO)
+        HA State                : [Active]
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00046 :   INFO)
+        Active Descriptor       :
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00047 :   INFO)
+        Transition Descriptor : [1]
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00048 :   INFO)
+            Active Component    : [csa112CompI0]
+    Mon Jul 14 22:51:20 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00049 :   INFO)
+        csa112: ACTIVE state requested; activating service
+
+.. note::
+    When running model csa212 you will not see the output described above for the the amsLockAssignment and amsUnlock commands. 
+    Unlock csa212SGI0 instead of csa112SGI0.
+
+Start up the event publishing application
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Now you can start up the event publishing application and put it in a LockAssignment state. (Unlock csa213SGI0 instead of csa113SGI0 
+to run csa213).
+
+.. code-block:: text
+
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa113SGI0
+    cli[Test:SCNodeI0:CPM]-> amsUnlock sg csa113SGI0
+
+Putting csa113 into a LockAssignment state caused it to begin publishing events. Using tail -f /root/asp/var/log/csa113CompI0Log.latest 
+on the csa113 application log you can see the events being published.(Unlock csa213SGI0 instead of csa113SGI0 to run SAF version).
+
+.. code-block:: text
+    :caption: $ /root/asp/var/log/csa113CompI0Log.latest
+
+    Mon Jul 14 22:53:54 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00028 :   INFO)
+        Component [csa113CompI0] : PID [24890]. Initializing
+    Mon Jul 14 22:53:54 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00029 :   INFO)
+        IOC Address             : 0x1
+    Mon Jul 14 22:53:54 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00030 :   INFO)
+        IOC Port                : 0x81
+    Mon Jul 14 22:53:54 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00037 :   INFO)
+        Instantiated as component instance csa113CompI0.
+    Mon Jul 14 22:53:54 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00038 :   INFO)
+        csa113CompI0: Waiting for CSI assignment...
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00041 :   INFO)
+        Component [csa113CompI0] : PID [24890]. CSI Set Received
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00042 :   INFO)
+        CSI Flags               : [Add One]
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00043 :   INFO)
+        CSI Name                : [csa113CSII0]
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00044 :   INFO)
+        Name Value Pairs        :
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00045 :   INFO)
+        HA State                : [Active]
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00046 :   INFO)
+        Active Descriptor       :
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00047 :   INFO)
+        Transition Descriptor : [1]
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00048 :   INFO)
+            Active Component    : [csa113CompI0]
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00049 :   INFO)
+        csa113: ACTIVE state requested; activating service
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00050 : NOTICE)
+        Publishing Event: Mon Jul 14 22:53:59 2008
+    Mon Jul 14 22:54:00 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00052 : NOTICE)
+        Publishing Event: 0.05 0.07 0.03
+    Mon Jul 14 22:54:01 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00054 : NOTICE)
+        Publishing Event: Mon Jul 14 22:54:01 2008
+    Mon Jul 14 22:54:02 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00056 : NOTICE)
+        Publishing Event: 0.05 0.07 0.03
+    Mon Jul 14 22:54:03 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00058 : NOTICE)
+        Publishing Event: Mon Jul 14 22:54:03 2008
+    Mon Jul 14 22:54:04 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00060 : NOTICE)
+        Publishing Event: 0.05 0.07 0.03
+
+Since the event subscriber application is also running you can see the events that it is receiving in the csa112 application log file. 
+Again using tail -f /rootasp//var/log/csa112CompI0Log.latest you can see the following:
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa112CompI0Log.latest
+
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00052 : NOTICE)
+        We've got an event to receive
+    Mon Jul 14 22:53:59 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00054 : NOTICE)
+        received event: Mon Jul 14 22:53:59 2008
+    Mon Jul 14 22:54:00 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00058 : NOTICE)
+        We've got an event to receive
+    Mon Jul 14 22:54:00 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00060 : NOTICE)
+        received event: 0.05 0.07 0.03
+    Mon Jul 14 22:54:01 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00064 : NOTICE)
+        We've got an event to receive
+    Mon Jul 14 22:54:01 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00066 : NOTICE)
+        received event: Mon Jul 14 22:54:01 2008
+    Mon Jul 14 22:54:02 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00070 : NOTICE)
+        We've got an event to receive
+    Mon Jul 14 22:54:02 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00072 : NOTICE)
+        received event: 0.05 0.07 0.03
+
+Shut down
+^^^^^^^^^
+Now you can shut everything down in the usual manner. Note that you will be shutting down two service groups.
+
+.. code-block:: text
+
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa113SGI0
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa112SGI0
+    cli[Test:SCNodeI0:CPM]-> amsLockInstantiation sg csa113SGI0
+    cli[Test:SCNodeI0:CPM]-> amsLockInstantiation sg csa112SGI0
+    cli[Test:SCNodeI0:CPM]-> end
+    cli[Test:SCNodeI0]-> end
+    cli[Test]-> bye
+
+Summary and References
+----------------------
+We've seen how to initialize the event manager subsystem as an event publisher. We've seen:
+
+* events flow from the event publisher to the subscriber.
+* how to format events and send them through the event manager subsystem
+* For further reading, check the same sources as listed under the csa112 section.

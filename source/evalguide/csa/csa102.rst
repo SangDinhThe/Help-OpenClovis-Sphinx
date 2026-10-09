@@ -34,7 +34,7 @@ those models. This is same as created for csa101.
 Create a project area using a script from the command line. To create a project area named **projectarea1** in the **/home/clovis** 
 directory you should execute the following command:
 
-.. code-block:: text
+.. code-block:: console
 
     # cl-create-project-area /home/clovis/projectarea1
 
@@ -45,7 +45,7 @@ simply enter cl-ide from any directory. If you did not create symbolic links dur
 
 * Add the installation directory to the shells search path and then launch the IDE as follows:
 
-.. code-block:: text
+.. code-block:: console
 
     # cl-ide
 
@@ -384,7 +384,7 @@ As with the csa102 example we will use the SAFplus Platform Console to manipulat
 Start the SAFplus Platform Console
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. code-block:: console
 
     # cd /root/asp/bin
     # ./asp_console
@@ -534,7 +534,7 @@ Changing the HA state of the Client/Server
 The easiest way to test component fail-over is to kill the process associated with the active component using the kill command. For 
 this you need to know the process ID of the active component. To find the process ID issue the following command from a bash shell.
 
-.. code-block:: text
+.. code-block:: console
 
     # ps -eaf | grep csa102
 
@@ -549,7 +549,7 @@ This should produce an output that looks similar to the following:
 Notice the two entries that end with csa102 -p. These are our two component processes. The first one is usually the active process. 
 This is the one that we will kill. In this case the process ID is 22012. So to kill the active component you issue the command:
 
-.. code-block:: text
+.. code-block:: console
 
     # kill -9 22012
 

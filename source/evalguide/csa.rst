@@ -9,4 +9,9 @@ Sample Applications
    csa/csa101
    csa/csa102
    csa/csa103
-
+   csa/csa104
+   csa/csa112
+   csa/csa113
+   csa/dhademo
+   csa/cmplugin
+   csa/csasum

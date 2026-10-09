@@ -418,7 +418,7 @@ Environment Related Observation
 
   * To resolve this problem disable all filtering in the Netfilter framework by issuing the following command.
 
-    .. code-block::
+    .. code-block:: console
 
         iptables -F
 

@@ -23,9 +23,9 @@ area is designed to hold multiple models which share the SAFplus Platform source
 #. If you have write access to the examples area of the <install_dir> you can simply use this as you project area. In this case 
    your **<project_area>** would be **<install_dir>/6.1/sdk/src/examples**.
 #. If you do not have write access to **<install_dir>/6.1/sdk/src/examples** create a new directory and copy the evaluation system 
-model to it. For example:
+   model to it. For example:
 
-   .. code-block:: text
+   .. code-block:: console
 
       $ mkdir <new_project_area>
       $ cp -r <install_dir>/6.1/sdk/src/examples/eval <new_project_area>/.
@@ -71,14 +71,14 @@ Configure the eval model
 ^^^^^^^^^^^^^^^^^^^^^^^^
 Configure the eval model for building by running the following:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>
     $ <install_dir>/6.1/sdk/src/SAFplus/configure --with-model-name=eval --with-safplus-build
 
 It is possible to use prebuilt libraries to configure eval model by running the following:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>
     $ <install_dir>/6.1/sdk/src/SAFplus/configure --with-model-name=eval --with-safplus-build
@@ -86,14 +86,14 @@ It is possible to use prebuilt libraries to configure eval model by running the 
 It is also possible to configure the eval model without configure option --with-model-name, but without using prebuilt libraries 
 by running the following:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>/eval
     $ <install_dir>/6.1/sdk/src/SAFplus/configure --with-safplus-build
 
 With reference to above mentioned different configure options, we can configure eval model, by running the following:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>/eval
     $ <install_dir>/6.1/sdk/src/SAFplus/configure
@@ -102,7 +102,7 @@ These all options will configure the eval model for deployment on the local mach
 
 In order to crossbuild this model for deployment on a non-native target supported by the <crossbuild> toolchain, run:
 
-.. code-block:: text
+.. code-block:: console
 
     $ <install_dir>/6.1/sdk/src/SAFplus/configure \
         --with-model-name=eval --with-safplus-build \
@@ -113,7 +113,7 @@ run sets up a target-specific build location at <project_area>/eval/build.
 
 If this model is to be deployed on an ATCA-based system with OpenHPI-based shelf management, enable Chassis Management with:
 
-.. code-block:: text
+.. code-block:: console
 
     $ <install_dir>/6.1/sdk/src/SAFplus/configure \
         --with-model-name=eval --with-safplus-build \
@@ -121,7 +121,7 @@ If this model is to be deployed on an ATCA-based system with OpenHPI-based shelf
 
 For a complete list of options to configure, including a list of available crossbuild toolchains, run:
 
-.. code-block:: text
+.. code-block:: console
 
     $ <install_dir>/6.1/sdk/src/SAFplus/configure --help
 
@@ -153,7 +153,7 @@ Build the configured model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 Build the configured model by issuing make in **<project_area>/eval**:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>/eval
     $ make
@@ -161,21 +161,21 @@ Build the configured model by issuing make in **<project_area>/eval**:
 This will build the eval model for all the targets it has been configured to build. In order to do a target-specific build, issue 
 make from the target-specific build location. e.g. for a local build:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>/eval
     $ make
 
 For a target supported by the <crossbuild> toolchain:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>/eval/build/<crossbuild>
     $ make
 
 For a complete list of options to make, run:
 
-.. code-block:: text
+.. code-block:: console
 
     $ make help
 
@@ -189,7 +189,7 @@ target system's configuration so that we build the correct images. A model's tar
 configuration file - target.conf. It is located at <project_area>/eval/src/target.conf. Open this file using your favorite editor 
 (e.g. vi):
 
-.. code-block:: text
+.. code-block:: console
 
     $ vi <project_area>/eval/src/target.conf
 
@@ -287,7 +287,7 @@ This file specifies a number of parameters that need to be defined for a given r
 
     we would specify the node instance details as:
 
-    .. code-block:: text
+    .. code-block:: bash
 
         SLOT_SCNodeI0=1
         SLOT_PayloadNodeI0=3
@@ -336,7 +336,7 @@ Building Single/Distributed Target Image(s)
 This section describes how to build target images for particular Hardware Setups. In essence we provide two types of target image, 
 the System Controller or Payload Node. The images are built with the make images command:
 
-.. code-block:: text
+.. code-block:: console
 
     $ cd <project_area>/eval
     $ make images
@@ -513,25 +513,25 @@ Installing SCNodeI0
 
 #. On the Development Machine locate the target images
 
-   .. code-block:: text
+   .. code-block:: console
 
       $ cd <project_area>/target/eval/images
 
 #. Copy the zipped tar System Controller image to the desired target.
 
-   .. code-block:: text
+   .. code-block:: console
 
       $ scp SCNodeI0.tgz root@<SystemController IPAddress>:/root/
 
    Enter password.
 
-   .. code-block:: text
+   .. code-block:: console
 
       # ssh root@<SystemController IPAddress>
 
    Enter password
 
-   .. code-block:: text
+   .. code-block:: console
 
       # cd /root
       
@@ -554,25 +554,25 @@ Installing PayloadNode0 and PayloadNode1
 Perform the following, if the distributed Hardware Setup 1.2, 1.3, 2.2 and 2.3 is chosen:
 
 #. On the Development machine locate the Target images
-   .. code-block:: text
+   .. code-block:: console
 
       $ cd <project_area>/target/eval/images
 
 #. Copy the zipped tar PayloadNode0 image to the desired target.
 
-   .. code-block:: text
+   .. code-block:: console
 
       $ scp PayloadNodeI0.tgz root@<PayloadNode0 IPAddress>:/root/
 
    Enter password.
 
-   .. code-block:: text
+   .. code-block:: console
 
       # ssh root@<PayloadNode0 IPAddress>
 
    Enter password
 
-   .. code-block:: text
+   .. code-block:: console
 
       # cd /root
       # mkdir asp

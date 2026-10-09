@@ -19,14 +19,20 @@ Download
 If you are looking for the SAFplus Platform Product itself, please download the latest release at `ftp.openclovis.com <https://ftp.openclovis.com/>`__. And visit our github repository `github.com/Openclovis <https://www.github.com/Openclovis/>`__.
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Content:
+   :maxdepth: 1
+   :caption: Main pages:
 
    Home <self>
-   Doc Central
+   Doc Central <source/docCentral>
    source/relnotes
    source/installguide
    source/tutorial
    source/evalguide
-   FAQ
+   source/faq
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Resources:
+   :hidden:
+
+   IDE User Guide <source/ideguide>

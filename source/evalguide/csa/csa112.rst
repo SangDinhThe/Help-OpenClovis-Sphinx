@@ -1,0 +1,227 @@
+csa112 Event Subscription
+=========================
+An event service is an communications mechanism organised around the categories of data rather then senders and receivers. A "publisher" 
+posts a message to a well-known event channel and all "subscribers" receive the message. Publishers and subscribers do not need to 
+know who each other are; they need only know the event channel name.
+
+As the Messaging service is similar to mail, the Event service is similar to a bulletin board.
+
+Objective
+---------
+The objective of csa112 is to learn how to use the SAFplus Platform event service to subscribe to events and to extract the relevant 
+information from the events received by subscription.
+
+What you will learn
+-------------------
+You will learn:
+
+* how to initialize the event library
+* how to subscribe to events
+* how to receive events
+* how to extract the event data
+
+The SAFplus Event service is SA-Forum compliant and this tutorial expects that you will refer to the relevant SA-Forum document for an in-depth description of the APIs used.
+
+Code
+----
+One difference to note between this application and previous ones is that this application will not have a main loop in initializeAmf. 
+Instead we will do our work in callback code. This means that when we return from initializeAmf we won't exit the application.
+
+.. code-block:: c
+    :caption: main.c
+
+    SaNameT evtChannelName =
+    {
+        sizeof EVENT_CHANNEL_NAME -1,
+        EVENT_CHANNEL_NAME
+    };
+
+    SaEvtChannelHandleT   evtChannelHandle = 0;
+    SaEvtHandleT          evtLibHandle=0;
+    SaEvtEventHandleT     eventHandle=0;
+
+    static void  csa112Comp_appEventCallback( SaEvtSubscriptionIdT subscriptionId, 
+                                            SaEvtEventHandleT eventHandle,
+                                            SaSizeT eventDataSize);
+
+Here we define variables to hold the payload of our event. Note the initialization of the evtChannelName. The length is set to the 
+length of the EVENT_CHANNEL_NAME string WITHOUT including the null terminator.
+
+.. code-block:: c
+    :caption: main.c
+
+    void
+    initializeAmf(void)
+    {
+        ...
+
+        const SaEvtCallbacksT evtCallbacks =
+        {
+            NULL,  /* Event open callback */
+            csa112Comp_appEventCallback  /* Event delivery callback */
+        };
+        ...
+
+        // publish our event callbacks
+        rc = saEvtInitialize(&evtLibHandle, &evtCallbacks, &evtVersion);
+        ...
+
+We initialize the OpenClovis Event Manager with saEvtInitialize. We pass the address of the variable where we want the event handle 
+stored. We pass the address of our event callback functions structure. Note that the only event callback function that we specify 
+is csa112Comp_appEventCallback. We do not specify the other callback which is the Asynchronous channel open callback. We specify 
+NULL for that field of evtCallbacks because we don't open our event channel asynchronously:
+
+.. code-block:: c
+    :caption: main.c
+
+    void
+    initializeAmf(void)
+    {
+
+        ...
+
+        // Open an event chanel so that we can subscribe to events on that channel
+        rc = saEvtChannelOpen(evtLibHandle, &evtChannelName, 
+                              (SA_EVT_CHANNEL_PUBLISHER | SA_EVT_CHANNEL_SUBSCRIBER | SA_EVT_CHANNEL_CREATE), 
+                              (SaTimeT)SA_TIME_END, &evtChannelHandle);
+        if (rc != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "Failure opening event channel [0x%x] at %ld", rc, time(0L));
+            errorExit(rc);
+        }
+        
+        rc = saEvtEventSubscribe(evtChannelHandle, NULL, 1);
+        if (rc != SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "Failed to subscribe to event channel [0x%x]",rc);
+            errorExit(rc);
+        }
+
+Within the above code we open the channel synchronously. We pass the handle we got back from saEvtInitialize, the channel name we 
+defined previously, flags that indicate this process is subscribing to the channel and it's a global channel, and that the channel 
+should be created if it's not already there, a timeout value of "forever", and the address of the location where the channel handle 
+should be stored. Then, we subscribe to a specific event stream on the event channel. The EVENT_TYPE constant is defined in 
+common/common.h as 5432. This value is used by the event publisher when it sends events. The constant 1 being passed simply identifies 
+this specific subscription on this channel. This value will be passed to our event delivery callback function.
+
+.. code-block:: c
+    :caption: main.c
+
+    static void 
+    csa112Comp_appEventCallback(SaEvtSubscriptionIdT subscriptionId,
+                                SaEvtEventHandleT eventHandle, 
+                                SaSizeT eventDataSize)
+    {
+    
+        SaAisErrorT     rc = SA_AIS_OK;
+        static ClPtrT   resTest = 0;    
+        clprintf(CL_LOG_SEV_INFO,"We've got an event to receive\n");
+
+        if (resTest != 0)
+        {
+            clHeapFree((char *)resTest);
+            resTest = 0;
+        }
+        resTest = clHeapAllocate(eventDataSize + 1);
+
+        if (resTest == 0)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "Failed to allocate space for event");
+            return;
+        }
+        rc = saEvtEventDataGet(eventHandle, resTest, &eventDataSize);
+
+        if (rc!= SA_AIS_OK)
+        {
+            clprintf(CL_LOG_SEV_ERROR, "Failed to get event data [0x%x]",rc);
+            return;
+        }
+
+        *(((char *)resTest) + eventDataSize) = 0;
+        clprintf(CL_LOG_SEV_INFO,"received event: %s\n", (char *)resTest);
+    }
+
+The event delivery callback function is named csa112Comp_appEventCallback. It checks whether our incoming data buffer needs to be 
+deallocated. If there is a buffer, it deallocates it and then allocates enough data to receive the incoming event data. Then, we 
+extract the data from the event into the newly allocated buffer using clEventDataGet. Finally, we print the event data we received 
+using clprintf which is another member of Clovis' OS Abstraction Layer. As its name and usage suggest, it is the OSAL replacement 
+for printf.
+
+.. note::
+    Before building the project,copy the common directory which can be found under <eval_dir>/src/app to the working area:
+
+    .. code-block:: console
+
+        # cp -r <eval_dir>/src/app/common  .
+
+How to Run csa112 and What to Observe
+-------------------------------------
+
+Start the example
+^^^^^^^^^^^^^^^^^
+Start example csa212 in the same manner that we have started previous examples, with the SAFplus Platform Console.(Unlock csa212SGI0 
+instead of csa112SGI0 to run csa212).
+
+.. code-block:: console
+
+    # cd /root/asp/bin
+    # ./asp_console
+
+.. code-block:: text
+
+    cli[Test]-> setc 1
+    cli[Test:SCNodeI0]-> setc cpm
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa212SGI0
+
+Looking at the log file for this example you should see the following.
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa212CompI3Log.latest
+
+    Fri Oct  1 13:14:16.935 2010 (PayloadNodeI1.10366 : csa212CompEO.---.---.00001 :   INFO) Component [csa212CompI3] : PID [10366]. Initializing
+
+    Fri Oct  1 13:14:16.935 2010 (PayloadNodeI1.10366 : csa212CompEO.---.---.00002 :   INFO)    IOC Address             : 0x4
+
+    Fri Oct  1 13:14:16.935 2010 (PayloadNodeI1.10366 : csa212CompEO.---.---.00003 :   INFO)    IOC Port                : 0x80
+
+    Fri Oct  1 13:15:31.389 2010 (PayloadNodeI1.10366 : csa212CompEO.---.---.00004 :   INFO) Component [csa212CompI3] : PID [10366]. CSI Set Received
+
+unlock the application
+^^^^^^^^^^^^^^^^^^^^^^
+Now unlock the application with:
+
+.. code-block:: text
+
+    cli[Test:SCNodeI0:CPM]-> amsUnlock sg csa212SGI0
+
+At this point you should see the following in the log.
+
+.. code-block:: text
+    :caption: /root/asp/var/log/csa212CompI3Log.latest
+
+    Fri Oct  1 13:15:31.389 2010 (PayloadNodeI1.10366 : csa212CompEO.---.---.00012 :   INFO) csa212: ACTIVE state requested; activating service
+
+Thats all there is to this example. What you are looking at in the log is the output of our event listener. It doesn't appear very 
+interesting because we have not yet written an event publisher that will give the program something to output. We'll do that in the 
+next example (csa213).
+
+Shut down the example
+^^^^^^^^^^^^^^^^^^^^^
+At this point we can shut down our example in the usual fashion.
+
+.. code-block:: text
+
+    cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa212SGI0
+    cli[Test:SCNodeI0:CPM]-> amsLockInstantiation sg csa212SGI0
+    cli[Test:SCNodeI0:CPM]-> end
+    cli[Test:SCNodeI0]-> end
+    cli[Test]-> bye
+
+.. note::
+    When running model csa212 you will not see the output described for the the amsLockAssignment and amsUnlock commands.
+
+Summary and References
+----------------------
+We've seen how to create a basic event subscriber application using Clovis' event manager library. For further reading check the 
+Clovis SAFplus Platform API reference guide, specifically the section on the event manager. Also, the header file: clEventExtApi.h 
+should be helpful.
