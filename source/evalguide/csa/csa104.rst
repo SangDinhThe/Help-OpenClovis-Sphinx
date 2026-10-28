@@ -347,7 +347,7 @@ The following output is given when you run tail -f on the csa104 log files. For 
     # ./eval start
     # tail -f var/log/csa104CompI?Log.latest
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa103CompI?Log.latest
 
     ==> var/log/csa104CompI0Log.latest <==
@@ -409,7 +409,7 @@ The logs show the work assignment occurring with csa104CompI0 as ACTIVE and csa1
 Next, find the active csa104 process and kill it. In this case, its the one that's receiving the messages. The process ID is available 
 in the log which is formmated as follows:
 
-.. code-block:: text
+.. code-block:: ClLog
 
     date                         (Node    .PID  : compname.---.---.logCount : SEVERITY) Message
     Fri Jan 11 14:38:55.255 2013 (SCNodeI0.3301 : csa104Comp.---.---.00020 :   INFO) Received Message  : Msg    6 from csa104CompI1
@@ -424,7 +424,7 @@ While keeping the tail running, open a new window and run the kill command:
 
 After killing the active component you should see lines in the log files like the following:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa103CompI1Log.latest
 
     root@gh-lubuntu1204:~/eval# tail -f var/log/csa104CompI?Log.latest
@@ -499,7 +499,7 @@ process that receives messages:
 
 This causes the following logs:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa103CompI1Log.latest
 
     ==> var/log/csa104CompI1Log.latest <==
@@ -525,7 +525,7 @@ the original pid of 3302).
 
 Next, the process is restarted and assigned standby:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa103CompI1Log.latest
 
     ==> var/log/csa104CompI0Log.latest <==

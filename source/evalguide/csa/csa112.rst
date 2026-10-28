@@ -167,7 +167,7 @@ instead of csa112SGI0 to run csa212).
     # cd /root/asp/bin
     # ./asp_console
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test]-> setc 1
     cli[Test:SCNodeI0]-> setc cpm
@@ -175,7 +175,7 @@ instead of csa112SGI0 to run csa212).
 
 Looking at the log file for this example you should see the following.
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa212CompI3Log.latest
 
     Fri Oct  1 13:14:16.935 2010 (PayloadNodeI1.10366 : csa212CompEO.---.---.00001 :   INFO) Component [csa212CompI3] : PID [10366]. Initializing
@@ -190,13 +190,13 @@ unlock the application
 ^^^^^^^^^^^^^^^^^^^^^^
 Now unlock the application with:
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM]-> amsUnlock sg csa212SGI0
 
 At this point you should see the following in the log.
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa212CompI3Log.latest
 
     Fri Oct  1 13:15:31.389 2010 (PayloadNodeI1.10366 : csa212CompEO.---.---.00012 :   INFO) csa212: ACTIVE state requested; activating service
@@ -209,7 +209,7 @@ Shut down the example
 ^^^^^^^^^^^^^^^^^^^^^
 At this point we can shut down our example in the usual fashion.
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa212SGI0
     cli[Test:SCNodeI0:CPM]-> amsLockInstantiation sg csa212SGI0

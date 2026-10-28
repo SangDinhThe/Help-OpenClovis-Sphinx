@@ -36,3 +36,8 @@ If you are looking for the SAFplus Platform Product itself, please download the 
    :hidden:
 
    IDE User Guide <source/ideguide>
+   SDK User Guide <source/sdkguide>
+   source/safcompliance
+   source/logtoolguide
+   source/tipcbuildandinstallguide
+   source/saf

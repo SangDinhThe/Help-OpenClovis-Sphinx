@@ -10,7 +10,9 @@ numbered applications.
 
 The sample applications are located within:
 
-<project-area_dir>/eval/src/app
+.. code-block:: text
+
+    <project-area_dir>/eval/src/app
 
 SA Forum Compliance
 -------------------

@@ -1045,7 +1045,7 @@ To use the SAFplus Platform Console:
 
 #. From within the SAFplus Platform Console:
 
-   .. code-block:: text
+   .. code-block:: ClCli
 
         cli[Test]-> setc 1
         cli[Test:SCNodeI0]-> setc cpm
@@ -1065,7 +1065,7 @@ To use the SAFplus Platform Console:
 
    You should see the following:
 
-   .. code-block:: text
+   .. code-block:: ClLog
         :caption: /root/asp/var/log/csa101I0Log.latest
 
         Wed Nov 12 11:54:38.424 2014 (SCNodeI0.10950 : csa101I0.MAI.---.00001 :   INFO) 
@@ -1085,13 +1085,13 @@ To use the SAFplus Platform Console:
 
 #. Next change the administrative state of the csa101SGI0 service group to "unlocked" by running (in the SAFplus Platform Console):
 
-   .. code-block:: text
+   .. code-block:: ClCli
 
         # cli[Test:SCNodeI0:CPM]-> amsUnlock sg csa101SGI0
 
    In the window where you're running the "tail -f" you should see:
 
-   .. code-block:: text
+   .. code-block:: ClLog
         :caption: /root/asp/var/log/csa101I0Log.latest
 
         Wed Nov 12 11:59:37.092 2014 (SCNodeI0.10950 : csa101I0.MAI.---.00163 :   INFO) 
@@ -1119,13 +1119,13 @@ To use the SAFplus Platform Console:
 
 #. Now change the state of the csa101SGI0 service group back to "locked-for-assignment" by running (in the SAFplus Platform Console):
 
-   .. code-block:: text
+   .. code-block:: ClCli
 
         # cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa101SGI0
 
    In the tail -f output you should see:
 
-   .. code-block:: text
+   .. code-block:: ClLog
         :caption: /root/asp/var/log/csa101I0Log.latest
 
         Wed Nov 12 12:07:17.591 2014 (SCNodeI0.10950 : csa101I0.MAI.---.00625 :   INFO) 
@@ -1161,7 +1161,7 @@ To use the SAFplus Platform Console:
    change it to state "locked-for-instantiation". The latter will cause the csa101 process to die. From state "locked-for-assignment", 
    it is possible to change the state to "locked-for-instantiation" by running (in the SAFplus Platform Console):
 
-   .. code-block:: text
+   .. code-block:: ClCli
 
         cli[Test:SCNodeI0:CPM]-> amsLockInstantiation sg csa101SGI0
         cli[Test:SCNodeI0:CPM]-> end

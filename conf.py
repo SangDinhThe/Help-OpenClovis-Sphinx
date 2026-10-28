@@ -33,6 +33,7 @@ html_css_files = [
     'css/headings.css',
     'css/tables.css',
     'css/imgs.css',
+    'css/custom.css',
 ]
 html_theme_options = {
 #    'logo_only': True,
@@ -40,3 +41,15 @@ html_theme_options = {
     'prev_next_buttons_location': 'none',
     'style_external_links': True,
 }
+html_show_sourcelink = False
+
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath('./lexers'))
+
+from clLexer import ClLogLexer, ClCliLexer
+from sphinx.highlighting import lexers
+
+lexers["ClLog"] = ClLogLexer(startinline = True)
+lexers["ClCli"] = ClCliLexer(startinline = True)

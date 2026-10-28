@@ -393,7 +393,7 @@ Lock assignment csa102SGI0
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 put the csa102SGI0 service group into lock assignment state using the following commands:
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test]-> setc 1
     cli[Test:SCNodeI0]-> setc cpm
@@ -406,7 +406,7 @@ Because example 102 has two components there will be two application log files t
 
 Viewing these application logs using the tail -f, you should see the following:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa102I0Log.latest
 
     Fri Nov 14 16:54:40.339 2014 (SCNodeI0.22012 : csa102I0.MAI.---.00001 :   INFO) 
@@ -421,7 +421,7 @@ Viewing these application logs using the tail -f, you should see the following:
     Fri Nov 14 16:54:42.342 2014 (SCNodeI0.22012 : csa102I0.MAI.---.00004 :   INFO) 
         csa102: idle
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa102I1Log.latest
 
     Fri Nov 14 16:54:40.347 2014 (SCNodeI0.22013 : csa102I1.MAI.---.00001 :   INFO) 
@@ -440,13 +440,13 @@ Unlock csa102SGI0
 ^^^^^^^^^^^^^^^^^
 Next, unlock the service group using the following SAFplus Platform Console command:
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM]-> amsUnlock sg csa102SGI0
 
 and in the /var/log/csa102I*.log files we should see:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa102I0Log.latest
 
     Fri Nov 14 16:55:21.816 2014 (SCNodeI0.22012 : csa102I0.MAI.---.00024 :   INFO) 
@@ -492,7 +492,7 @@ and in the /var/log/csa102I*.log files we should see:
     Fri Nov 14 16:55:25.823 2014 (SCNodeI0.22012 : csa102I0.MAI.---.00038 :   INFO) 
         csa102: Unthreaded Hello World!      .
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa102I1Log.latest
 
     Fri Nov 14 16:55:21.855 2014 (SCNodeI0.22013 : csa102I1.MAI.---.00024 :   INFO) 
@@ -559,7 +559,7 @@ This is the one that we will kill. In this case the process ID is 22012. So to k
 
 After executing the kill command you can see in the csa102I1 application that the standby component is now active.
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa102I1Log.latest
 
     Fri Nov 14 16:56:00.257 2014 (SCNodeI0.22013 : csa102I1.MAI.---.00053 :   INFO) 
@@ -606,7 +606,7 @@ This indicates that the standby component has taken over for the failed active c
 Looking in the csa102I0 application log you can see that this component was killed and has been restarted. Since csa102I1 took over 
 as the active component this component now goes into the standby state.
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa102I0Log.latest
 
     Fri Nov 14 16:56:00.768 2014 (SCNodeI0.22096 : csa102I0.MAI.---.00001 :   INFO) 
@@ -652,13 +652,13 @@ You can continue to observe this failover by alternately killing the active comp
 
 To stop csa102 using the SAFplus Platform Console.
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM] -> amsLockAssignment sg csa102SGI0
 
 Successfully changed state of csa102SGI0 to LockAssignment
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM] -> amsLockInstantiation sg csa102SGI0
     cli[Test:SCNodeI0:CPM] -> end

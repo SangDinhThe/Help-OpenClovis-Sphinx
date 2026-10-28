@@ -410,7 +410,7 @@ Environment Related Observation
 
   * The enablement of a firewall on a system running a deployed SAFplus Platform image can cause the software to shutdown. An indication that you may be running into this problem is if you see an entry similar to the following in your log file (in the log file it is one line):
 
-    .. code-block:: text
+    .. code-block:: ClLog
 
         Wed Sep 26 15:06:54 2007   (SCNodeI0.10499 : GMS.---.---.00036 :  ERROR)
            [clGmsEngine.c:448] No nodes in the cluster view to run leader 

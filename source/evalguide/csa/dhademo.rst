@@ -313,7 +313,7 @@ Lock assignment dhaDemoSG
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 Then put the dhaDemoSG service group into lock assignment state using the following commands:
 
-.. code-block:: console
+.. code-block:: ClCli
 
     # cli[Test]-> setc master
     # cli[Test:SysCtrlI0]-> setc cpm
@@ -322,7 +322,7 @@ Then put the dhaDemoSG service group into lock assignment state using the follow
 The logs for dhaDemo application will be logged into file **/root/asp/var/log/app.0** on node **WorkerI0**. Viewing these application logs 
 using the tail -f, you should see the following:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/app.0
 
     Wed Sep  3 16:03:02 2008   (WorkerI0.21785 : dhaDemo_EO.---.---.00031 :   INFO) Component [dhaDemo] : PID [21785]. Initializing
@@ -335,13 +335,13 @@ Create the AMF entities
 ^^^^^^^^^^^^^^^^^^^^^^^
 To create the AMF entities dynamically, unlock the dhaDemoSG service group using the following SAFplus Platform Console command.
 
-.. code-block:: text
+.. code-block:: ClCli
 
     # cli[Test:SysCtrlI0:CPM]->  amsUnlock sg dhaDemoSG
 
 and in the **/root/asp/var/log/app.0** file (on node **WorkerI0**) , we should see:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/app.0
 
     Wed Sep  3 16:07:33 2008   (WorkerI0.21785 : dhaDemo_EO.---.---.00036 :   INFO) Component [dhaDemo] : PID [21785]. CSI Set Received
@@ -417,7 +417,7 @@ the logs present at nodes WorkerI0 and WorkerI1.
 
 In **/root/asp/var/log/app.0** file (on node **WorkerI0**) , we should see the dynamically created component getting assigned ACTIVE state:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/app.0
 
     Wed Sep  3 16:07:43 2008   (WorkerI0.22187 : dummyComp_EO.---.---.00031 :   INFO) Component [dynamicComp0] : PID [22187]. Initializing
@@ -440,7 +440,7 @@ In **/root/asp/var/log/app.0** file (on node **WorkerI0**) , we should see the d
 
 In **/root/asp/var/log/app.0** file (on node **WorkerI1**) , we should see the dynamically created component getting assigned STANDBY state:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/app.0
 
     Wed Sep  3 16:07:43 2008   (WorkerI1.23159 : dummyComp_EO.---.---.00031 :   INFO) Component [dynamicComp1] : PID [14623]. Initializing
@@ -469,13 +469,13 @@ Delete the AMF entities
 ^^^^^^^^^^^^^^^^^^^^^^^
 To delete the AMF entities dynamically, lock the dhaDemoSG service group using the following SAFplus Platform Console command:
 
-.. code-block:: text
+.. code-block:: ClCli
 
     # cli[Test:SysCtrlI0:CPM]->  amsLockAssignment sg dhaDemoSG
 
 and in the **/root/asp/var/log/app.0** (on node **WorkerI0**) file, we should see:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/app.0
 
     Wed Sep  3 16:34:27 2008   (WorkerI0.17193 : dhaDemo_EO.---.---.00102 :   INFO) Component [dhaDemo] : PID [17193]. CSI Set Received
@@ -532,19 +532,19 @@ You can continue to observe this create/delete of AMF entities dynamically by un
 
 * To unlock the dhaDemoSG using the SAFplus Platform Console (this will create the AMF entities dynamically):
 
-  .. code-block:: text
+  .. code-block:: ClCli
 
     # cli[Test:SysCtrlI0:CPM]-> amsUnlock sg dhaDemoSG
 
 * To lock the dhaDemoSG using the SAFplus Platform Console (this will delete the AMF entities dynamically):
 
-  .. code-block:: text
+  .. code-block:: ClCli
 
     # cli[Test:SysCtrlI0:CPM]-> amsLockAssignment sg dhaDemoSG
 
 * To stop the demo and exit, following CLI commands may be used:
 
-  .. code-block:: text
+  .. code-block:: ClCli
 
     # cli[Test:SysCtrlI0:CPM]-> amsLockAssignment sg dhaDemoSG
     # cli[Test:SysCtrlI0:CPM]-> amsLockInstantiation sg dhaDemoSG
@@ -554,4 +554,3 @@ Summary
 -------
 This Sample Application has covered basic dynamic HA functionality, with creation/deletion of AMF entities (SG, SI, CSI, SU, 
 Component, etc) using Clovis AMF management APIs.
-

@@ -459,7 +459,7 @@ Lock assignment sg csa103SGI0
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 First, on the active System Controller move it to state LockAssignment with (Unlock csa203SGI0 instead of csa103SGI0 to run csa203)
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test]-> setc 1
     cli[Test:SCNodeI0]-> setc cpm
@@ -471,7 +471,7 @@ The following output is given when you run tail -f on both of the csa103 log fil
 
     # tail -f var/log/csa103CompI?Log.latest
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa103CompI0Log.latest
 
     root@gh-lubuntu1204:~/eval# tail -f var/log/csa103CompI?Log.latest
@@ -504,7 +504,7 @@ Kill process
 Next, let us kill this process (the process ID is in the logs, just after the node name -- in this case 4276) while simultaneously 
 "tailing" the logs:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa103CompI?Log.latest
 
     Tue Jan 15 15:55:36.237 2013 (SCNodeI0.4276 : csa103CompEO0.---.---.00593 :   INFO) Hello World! (seq=521)
@@ -594,13 +594,13 @@ Stop csa103
 ^^^^^^^^^^^
 To stop csa103 use the following SAFplus Platform Console command:
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa103SGI0
 
 Now change the state of csa103SGI0 to LockInstantiation and close the SAFplus Platform Console.
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM]-> amsLockInstantiation sg csa103SGI0
     cli[Test:SCNodeI0:CPM]-> end

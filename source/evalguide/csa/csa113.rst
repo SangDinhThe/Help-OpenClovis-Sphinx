@@ -197,7 +197,7 @@ csa112SGI0 to run csa213).
     # cd /root/asp/bin
     # ./asp_console
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test]-> setc 1
     cli[Test:SCNodeI0]-> setc cpm
@@ -206,7 +206,7 @@ csa112SGI0 to run csa213).
 
 In the csa112 application log you should see:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: $ /root/asp/var/log/csa112CompI0Log.latest
 
     Mon Jul 14 22:50:34 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00037 :   INFO)
@@ -241,7 +241,7 @@ Start up the event publishing application
 Now you can start up the event publishing application and put it in a LockAssignment state. (Unlock csa213SGI0 instead of csa113SGI0 
 to run csa213).
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa113SGI0
     cli[Test:SCNodeI0:CPM]-> amsUnlock sg csa113SGI0
@@ -249,7 +249,7 @@ to run csa213).
 Putting csa113 into a LockAssignment state caused it to begin publishing events. Using tail -f /root/asp/var/log/csa113CompI0Log.latest 
 on the csa113 application log you can see the events being published.(Unlock csa213SGI0 instead of csa113SGI0 to run SAF version).
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: $ /root/asp/var/log/csa113CompI0Log.latest
 
     Mon Jul 14 22:53:54 2008   (SCNodeI0.24890 : csa113CompEO.---.---.00028 :   INFO)
@@ -296,7 +296,7 @@ on the csa113 application log you can see the events being published.(Unlock csa
 Since the event subscriber application is also running you can see the events that it is receiving in the csa112 application log file. 
 Again using tail -f /rootasp//var/log/csa112CompI0Log.latest you can see the following:
 
-.. code-block:: text
+.. code-block:: ClLog
     :caption: /root/asp/var/log/csa112CompI0Log.latest
 
     Mon Jul 14 22:53:59 2008   (SCNodeI0.24830 : csa112CompEO.---.---.00052 : NOTICE)
@@ -320,7 +320,7 @@ Shut down
 ^^^^^^^^^
 Now you can shut everything down in the usual manner. Note that you will be shutting down two service groups.
 
-.. code-block:: text
+.. code-block:: ClCli
 
     cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa113SGI0
     cli[Test:SCNodeI0:CPM]-> amsLockAssignment sg csa112SGI0

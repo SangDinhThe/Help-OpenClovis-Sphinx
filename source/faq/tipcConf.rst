@@ -58,3 +58,9 @@ UDP configuration
 -----------------
 
 :ref:`Switch your model/image from TIPC to UDP <switch-tipc-udp-label>`
+
+
+.. toctree::
+    :hidden:
+
+    tipcToUdp
